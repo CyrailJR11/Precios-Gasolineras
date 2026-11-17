@@ -1,7 +1,7 @@
 // Accesibilidad, diseño adaptable, temas, seguridad, PWA y funcionamiento sin conexión
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
-import { mockData, waitLiveSettled, RAW } from './helpers.mjs';
+import { mockData, waitLiveSettled, RAW, snapshot } from './helpers.mjs';
 
 const axe = (page) => new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']);
 const serious = (r) => r.violations.filter((v) => ['serious', 'critical'].includes(v.impact));
@@ -177,5 +177,20 @@ test.describe('sin conexión', () => {
     await expect(page.locator('#source')).toHaveAttribute('data-kind', 'error');
     await expect(page.locator('#source')).toContainText('El Ministerio no responde');
     await context.setOffline(false);
+  });
+});
+
+test.describe('hora de Girona', () => {
+  // Un móvil configurado en Nueva York debe ver igualmente la hora de España
+  test.use({ timezoneId: 'America/New_York' });
+
+  test('las horas se muestran en hora de España aunque el móvil esté en otra zona', async ({ page }) => {
+    const snap = { ...snapshot(), actualizado: '2026-11-17T22:39:00Z' }; // 23:39 en Girona, 17:39 en Nueva York
+    await mockData(page, { live: 'fail', snap });
+    await page.goto('/');
+    await waitLiveSettled(page);
+    const main = page.locator('#source .src-main');
+    await expect(main).toContainText('23:39');
+    await expect(main).not.toContainText('17:39');
   });
 });

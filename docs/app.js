@@ -24,7 +24,10 @@ const state = {
 
 const fmtPrice = (v) => v.toFixed(3).replace('.', ',');
 const fmtKm = (km) => (km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(km < 10 ? 1 : 0).replace('.', ',')} km`);
-const fmtDate = (d, opts) => d.toLocaleString('es-ES', opts);
+// Todas las horas se muestran en hora de Girona (España), aunque el móvil esté en otra zona horaria
+const TZ = 'Europe/Madrid';
+const fmtDate = (d, opts) => d.toLocaleString('es-ES', { timeZone: TZ, ...opts });
+const dayKey = (d) => d.toLocaleDateString('es-ES', { timeZone: TZ });
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const norm = (s) => String(s || '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
 
@@ -89,7 +92,7 @@ function refreshLive() {
 // "22:28" si es de hoy; "16 nov, 22:28" si no
 function fmtWhen(date) {
   const hhmm = fmtDate(date, { hour: '2-digit', minute: '2-digit' });
-  return date.toDateString() === new Date().toDateString() ? hhmm : fmtDate(date, { day: 'numeric', month: 'short' }) + ', ' + hhmm;
+  return dayKey(date) === dayKey(new Date()) ? hhmm : fmtDate(date, { day: 'numeric', month: 'short' }) + ', ' + hhmm;
 }
 
 function fmtAgo(date) {
