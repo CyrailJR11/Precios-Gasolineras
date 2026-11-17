@@ -12,14 +12,14 @@
   <link rel="apple-touch-icon" href="icon-192.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Gasolina GI">
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=3">
 </head>
 <body>
   <header class="top">
-    <div class="title-row">
-      <h1>Gasolina Girona</h1>
-      <button id="updated" class="updated muted small" type="button" aria-live="polite">Cargando…</button>
-    </div>
+    <h1>Gasolina Girona</h1>
+    <button id="source" class="source" type="button" aria-live="polite" title="Toca para consultar los precios en directo">
+      <span class="src-dot" aria-hidden="true"></span><span class="src-text"><span class="src-main">Cargando…</span></span>
+    </button>
 
     <div class="chips" id="fuelChips" role="radiogroup" aria-label="Combustible"></div>
 
@@ -114,6 +114,6 @@
     </div>
   </dialog>
 
-  <script type="module" src="app.js"></script>
+  <script type="module" src="app.js?v=3"></script>
 </body>
 </html>

@@ -68,25 +68,65 @@ async function fetchLive() {
   }
 }
 
+// Estado de la última actualización, para la barra de origen
+const meta = {
+  snapshotAt: null, // hora de la copia horaria guardada en GitHub
+  liveAt: null,     // hora de la última consulta en directo al Ministerio que funcionó
+  liveError: false, // la última consulta en directo falló
+  loading: false,   // consulta en directo en curso
+};
+
 function refreshLive() {
   if (liveInFlight) return liveInFlight;
-  setUpdated('loading');
+  meta.loading = true;
+  renderSource();
   liveInFlight = fetchLive()
-    .then((d) => { liveInFlight = null; apply(d); return true; })
-    .catch(() => { liveInFlight = null; setUpdated(); return false; });
+    .then((d) => { liveInFlight = null; meta.loading = false; meta.liveError = false; meta.liveAt = new Date(d.actualizado); apply(d); return true; })
+    .catch(() => { liveInFlight = null; meta.loading = false; meta.liveError = true; renderSource(); return false; });
   return liveInFlight;
 }
 
-function setUpdated(mode) {
-  const el = $('#updated');
+// "22:28" si es de hoy; "16 nov, 22:28" si no
+function fmtWhen(date) {
+  const hhmm = fmtDate(date, { hour: '2-digit', minute: '2-digit' });
+  return date.toDateString() === new Date().toDateString() ? hhmm : fmtDate(date, { day: 'numeric', month: 'short' }) + ', ' + hhmm;
+}
+
+function fmtAgo(date) {
+  const min = Math.round((Date.now() - date) / 60000);
+  if (min < 1) return 'ahora mismo';
+  if (min < 60) return `hace ${min} min`;
+  const h = Math.floor(min / 60);
+  if (h < 48) return `hace ${h} h${min % 60 && h < 6 ? ' ' + (min % 60) + ' min' : ''}`;
+  return `hace ${Math.floor(h / 24)} días`;
+}
+
+// Barra bajo el título: cuándo se actualizó por última vez y de dónde salen los precios
+function renderSource() {
+  const el = $('#source');
   const d = state.data;
-  if (!d) { el.textContent = mode === 'loading' ? 'Cargando…' : ''; return; }
-  const upd = new Date(d.actualizado);
-  const hhmm = fmtDate(upd, { hour: '2-digit', minute: '2-digit' });
-  const when = Date.now() - upd < 20 * 3600 * 1000 ? hhmm : fmtDate(upd, { day: 'numeric', month: 'short' }) + ', ' + hhmm;
-  el.textContent = mode === 'loading' ? 'Actualizando…' : (d.live ? 'En directo ' : 'Guardado ') + when;
-  el.title = (d.live ? 'Precios consultados en directo al Ministerio: ' : 'Copia guardada por la tarea horaria: ')
-    + fmtDate(upd, { dateStyle: 'full', timeStyle: 'short' }) + '. Toca para actualizar.';
+  let kind, main, sub;
+  if (!d) {
+    kind = meta.loading ? 'loading' : 'error';
+    main = meta.loading ? 'Consultando precios al Ministerio…' : 'Sin datos';
+    sub = meta.loading ? '' : 'No se ha podido conectar · Toca para reintentar';
+  } else {
+    const at = new Date(d.actualizado);
+    kind = d.live ? 'live' : meta.liveError ? 'error' : 'saved';
+    main = `Actualizado a las ${fmtWhen(at)} (${fmtAgo(at)})`;
+    const origin = d.live
+      ? 'Origen: en directo del Ministerio'
+      : 'Origen: copia horaria guardada en GitHub';
+    let extra;
+    if (meta.loading) extra = 'Consultando al Ministerio…';
+    else if (meta.liveError) extra = 'El Ministerio no responde ahora · Toca para reintentar';
+    else if (d.live) extra = meta.snapshotAt ? `Copia horaria: ${fmtWhen(meta.snapshotAt)} · Toca para actualizar` : 'Toca para actualizar';
+    else extra = 'Toca para consultar en directo';
+    sub = `${origin}<br>${extra}`;
+  }
+  el.dataset.kind = kind;
+  el.innerHTML = `<span class="src-dot" aria-hidden="true"></span><span class="src-text"><span class="src-main">${esc(main)}</span>${sub ? `<span class="src-sub">${sub}</span>` : ''}</span>`;
+  el.setAttribute('aria-busy', String(meta.loading));
 }
 
 function apply(d) {
@@ -109,22 +149,26 @@ function apply(d) {
   if (!munis.includes(state.muni)) state.muni = '';
   sel.value = state.muni;
 
-  setUpdated(liveInFlight ? 'loading' : undefined);
+  renderSource();
   render();
 }
 
 async function load() {
-  setUpdated('loading');
+  meta.loading = true;
+  renderSource();
   const live = refreshLive();
   try {
-    apply(await fetchSnapshot());
-    if (liveInFlight) setUpdated('loading');
+    const snap = await fetchSnapshot();
+    meta.snapshotAt = new Date(snap.actualizado);
+    apply(snap);
   } catch { /* sin copia guardada: se espera al directo */ }
   const ok = await live;
   if (!ok && !state.data) {
     $('#status').textContent = 'No se han podido cargar los datos. Revisa la conexión y vuelve a intentarlo.';
-    $('#updated').textContent = '';
   }
+  renderSource();
+  // Refresca el "hace X min" cada minuto
+  setInterval(renderSource, 60000);
 }
 
 function renderChips(container, items, current, onPick) {
@@ -433,10 +477,10 @@ document.addEventListener('visibilitychange', () => {
   // Al volver a la app tras más de 5 minutos, pide de nuevo los precios en directo
   if (document.visibilityState === 'visible' && state.data && Date.now() - new Date(state.data.actualizado) > 5 * 60 * 1000) refreshLive();
 });
-$('#updated').addEventListener('click', () => refreshLive());
+$('#source').addEventListener('click', () => refreshLive());
 
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
-  navigator.serviceWorker.register('sw.js').catch(() => {});
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch(() => {});
 }
 
 load();

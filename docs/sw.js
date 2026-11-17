@@ -1,5 +1,5 @@
 // Service worker: la interfaz funciona sin conexión y los datos se piden siempre a la red primero.
-const CACHE = 'gg-v2';
+const CACHE = 'gg-v3';
 const SHELL = ['./', 'index.html', 'style.css', 'app.js', 'transform.mjs','manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', (e) => {
@@ -17,9 +17,9 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
   if (e.request.method !== 'GET' || url.origin !== location.origin) return;
-  // Red primero; si no hay conexión, lo último guardado
+  // Red primero (saltándose la caché HTTP de 10 min de GitHub Pages); si no hay conexión, lo último guardado
   e.respondWith(
-    fetch(e.request)
+    fetch(e.request, { cache: 'no-cache' })
       .then((res) => {
         if (res.ok) { const copy = res.clone(); caches.open(CACHE).then((c) => c.put(e.request, copy)); }
         return res;
