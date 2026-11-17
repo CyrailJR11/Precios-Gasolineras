@@ -45,3 +45,15 @@ node scripts/serve.mjs     # http://localhost:8080
 ```
 
 Para otra provincia: `PROVINCIA=08 node scripts/collect.mjs` (código INE de provincia).
+
+## Pruebas
+
+| Tipo | Qué comprueba | Cómo se ejecuta |
+|---|---|---|
+| Unitarias | Conversión de datos del Ministerio, histórico, medias, reintentos | `npm run test:unit` |
+| Integración | Recolector completo contra una API simulada (fallos, idempotencia, ficheros corruptos, ids peligrosos) y servidor local | `npm run test:integration` |
+| Contrato | Que la API real del Ministerio mantiene formato, rangos de precios y CORS | `npm run test:contract` (también cada día en CI) |
+| E2E (Playwright) | Flujos en Android e iPhone: directo/copia, fallos de red, filtros, búsqueda, "Cerca de mí", ficha y gráfico, accesibilidad (axe, claro y oscuro), diseño adaptable, seguridad, PWA y modo sin conexión | `npm install && npx playwright install && npm run test:e2e` |
+
+`npm test` lanza unitarias e integración (no necesita instalar nada). Todo se ejecuta en GitHub Actions
+(`.github/workflows/tests.yml`) en cada cambio de código.
