@@ -2,3 +2,7 @@ node_modules/
 .DS_Store
 Thumbs.db
 .claude/
+package-lock.json
+playwright-report/
+test-results/
+blob-report/

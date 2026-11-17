@@ -1,0 +1,65 @@
+name: Pruebas
+
+on:
+  push:
+    branches: [main]
+    # Los commits horarios de precios solo tocan docs/data: no hace falta volver a probar
+    paths-ignore: ['docs/data/**']
+  pull_request:
+  workflow_dispatch: {}
+  schedule:
+    # Cada día a las 06:30 UTC: comprueba que la API del Ministerio no ha cambiado de formato
+    - cron: '30 6 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unitarias-integracion:
+    name: Unitarias e integración
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm test
+
+  contrato:
+    name: Contrato con la API del Ministerio
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm run test:contract
+
+  e2e:
+    name: E2E móvil (Android e iPhone), accesibilidad y offline
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium webkit
+      - run: npm run test:e2e
+        env:
+          CI: 'true'
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: informe-playwright
+          path: playwright-report/
+          retention-days: 14

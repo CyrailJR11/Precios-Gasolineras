@@ -479,7 +479,7 @@ document.addEventListener('visibilitychange', () => {
 });
 $('#source').addEventListener('click', () => refreshLive());
 
-if ('serviceWorker' in navigator && location.protocol === 'https:') {
+if ('serviceWorker' in navigator && window.isSecureContext) {
   navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch(() => {});
 }
 

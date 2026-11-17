@@ -7,10 +7,11 @@
   --grid: #ebeae6;
   --text-primary: #0b0b0b;
   --text-secondary: #52514e;
-  --text-muted: #77756f;
+  --text-muted: #6b6963;
   --accent: #2a78d6;
   --accent-ink: #1c5cab;
   --accent-soft: #e3effc;
+  --accent-fill: #256abf; /* fondo de botones con texto blanco (contraste >= 4.5:1) */
   --series-1: #2a78d6;
   --series-ref: #8c8a83;
   --good: #0a7d0a;
@@ -33,6 +34,7 @@
     --accent: #3987e5;
     --accent-ink: #86b6ef;
     --accent-soft: #1f3550;
+    --accent-fill: #256abf;
     --series-1: #3987e5;
     --series-ref: #8f8d85;
     --good: #4cc44c;
@@ -46,7 +48,7 @@
   --surface-0: #121211; --surface-1: #1a1a19; --surface-2: #232321;
   --border: #34342f; --grid: #2b2b28;
   --text-primary: #f0efec; --text-secondary: #c3c2b7; --text-muted: #9a988f;
-  --accent: #3987e5; --accent-ink: #86b6ef; --accent-soft: #1f3550;
+  --accent: #3987e5; --accent-ink: #86b6ef; --accent-soft: #1f3550; --accent-fill: #256abf;
   --series-1: #3987e5; --series-ref: #8f8d85;
   --good: #4cc44c; --good-soft: #1d3a1d; --bad: #e66767; --shadow: none;
 }
@@ -98,7 +100,7 @@ h1 { font-size: 20px; margin: 0; letter-spacing: -.01em; white-space: nowrap; }
   flex: none; border: 1px solid var(--border); background: var(--surface-2); color: var(--text-primary);
   border-radius: 999px; padding: 7px 13px; font: inherit; font-size: 14px; cursor: pointer; white-space: nowrap;
 }
-.chips button[aria-checked="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+.chips button[aria-checked="true"] { background: var(--accent-fill); border-color: var(--accent-fill); color: #fff; }
 .small-chips { margin: 0; padding: 2px 0; }
 .small-chips button { padding: 5px 11px; font-size: 13px; }
 
@@ -116,7 +118,7 @@ select, input[type="search"] {
   border: 1px solid var(--border); background: var(--surface-2); color: var(--text-primary); text-decoration: none;
 }
 .btn[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-ink); }
-.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.primary { background: var(--accent-fill); border-color: var(--accent-fill); color: #fff; }
 .icon-btn { border: 0; background: transparent; color: var(--text-secondary); padding: 8px; border-radius: 999px; cursor: pointer; }
 
 main { padding: 12px 16px 8px; max-width: 760px; margin: 0 auto; }

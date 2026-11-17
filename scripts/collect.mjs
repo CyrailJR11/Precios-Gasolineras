@@ -5,39 +5,35 @@
 // Genera:
 //   docs/data/latest.json      -> estado actual de todas las gasolineras
 //   docs/data/h/<IDEESS>.json  -> histórico por gasolinera (solo puntos de cambio)
+//   docs/data/avg.json         -> media provincial por combustible
 
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { API_BASE, FUELS, FUEL_LABELS, transform, parseFechaMinisterio, isValidResponse } from '../docs/transform.mjs';
 
-const PROVINCIA = process.env.PROVINCIA || '17'; // 17 = Girona
-const API = API_BASE + PROVINCIA;
-
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const DATA = join(ROOT, 'docs', 'data');
-const HIST = join(DATA, 'h');
+export const AVG_KEEP_DAYS = 400;
+export const AVG_MIN_STATIONS = 3;
 
-async function fetchWithRetry(url, tries = 4) {
+export async function fetchWithRetry(url, { tries = 4, fetchImpl = fetch, delayMs = 5000, timeoutMs = 60_000, log = console } = {}) {
   let lastErr;
   for (let i = 0; i < tries; i++) {
     try {
-      const res = await fetch(url, {
+      const res = await fetchImpl(url, {
         headers: { Accept: 'application/json', 'User-Agent': 'precios-carburantes-girona/1.0' },
-        signal: AbortSignal.timeout(60_000),
+        signal: AbortSignal.timeout(timeoutMs),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
-      if (!isValidResponse(json)) {
-        throw new Error('Respuesta sin estaciones');
-      }
+      if (!isValidResponse(json)) throw new Error('Respuesta sin estaciones');
       return json;
     } catch (e) {
       lastErr = e;
-      console.warn(`Intento ${i + 1} fallido: ${e.message}`);
-      await new Promise((r) => setTimeout(r, 5000 * (i + 1)));
+      log.warn(`Intento ${i + 1} fallido: ${e.message}`);
+      if (i < tries - 1) await new Promise((r) => setTimeout(r, delayMs * (i + 1)));
     }
   }
   throw lastErr;
@@ -52,73 +48,95 @@ async function readJson(path, fallback) {
   }
 }
 
-async function main() {
-  const now = new Date();
-  const raw = await fetchWithRetry(API);
+/**
+ * Añade al histórico de una gasolinera los precios que han cambiado.
+ * Formato: { "g95": [[ts, precio], ...] }. Un combustible que deja de venderse se marca con null.
+ * Modifica `h` y devuelve true si ha cambiado algo.
+ */
+export function updateHistory(h, prices, ts) {
+  let dirty = false;
+  for (const [k, v] of Object.entries(prices)) {
+    const arr = (h[k] ||= []);
+    const last = arr[arr.length - 1];
+    if (!last || last[1] !== v) {
+      arr.push([ts, v]);
+      dirty = true;
+    }
+  }
+  for (const k of Object.keys(h)) {
+    const arr = h[k];
+    if (!(k in prices) && arr.length && arr[arr.length - 1][1] !== null) {
+      arr.push([ts, null]);
+      dirty = true;
+    }
+  }
+  return dirty;
+}
+
+/**
+ * Añade la media provincial de cada combustible (solo venta al público y con al menos
+ * AVG_MIN_STATIONS gasolineras). Borra los puntos de más de AVG_KEEP_DAYS días. Devuelve `avg`.
+ */
+export function updateAverages(avg, stations, ts) {
+  const cutoff = ts - AVG_KEEP_DAYS * 86400;
+  for (const k of Object.keys(FUELS)) {
+    const vals = stations.filter((s) => !s.r && s.p[k] != null).map((s) => s.p[k]);
+    if (avg[k]) avg[k] = avg[k].filter((x) => x[0] >= cutoff);
+    if (vals.length < AVG_MIN_STATIONS) continue;
+    const mean = Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 1000) / 1000;
+    const arr = (avg[k] ||= []);
+    const last = arr[arr.length - 1];
+    if (!last || last[1] !== mean) arr.push([ts, mean]);
+  }
+  return avg;
+}
+
+/** Ejecuta una recogida completa. Todo es inyectable para poder probarlo. */
+export async function run({
+  provincia = process.env.PROVINCIA || '17',
+  apiUrl = API_BASE + provincia,
+  dataDir = join(ROOT, 'docs', 'data'),
+  now = new Date(),
+  fetchImpl = fetch,
+  retry = {},
+  log = console,
+} = {}) {
+  const raw = await fetchWithRetry(apiUrl, { fetchImpl, log, ...retry });
   const stations = transform(raw);
   const ts = Math.floor(now.getTime() / 1000);
-
-  await mkdir(HIST, { recursive: true });
+  const histDir = join(dataDir, 'h');
+  await mkdir(histDir, { recursive: true });
 
   let changed = 0;
   for (const s of stations) {
-    const path = join(HIST, `${s.id}.json`);
-    // Formato: { "g95": [[ts, precio], ...], ... } — solo se añade un punto si el precio cambia
+    if (!/^\d+$/.test(String(s.id))) continue; // el id se usa como nombre de fichero
+    const path = join(histDir, `${s.id}.json`);
     const h = await readJson(path, {});
-    let dirty = false;
-    for (const [k, v] of Object.entries(s.p)) {
-      const arr = (h[k] ||= []);
-      const last = arr[arr.length - 1];
-      if (!last || last[1] !== v) {
-        arr.push([ts, v]);
-        dirty = true;
-      }
-    }
-    // Combustible que deja de venderse: se marca con null para cortar la línea
-    for (const k of Object.keys(h)) {
-      const arr = h[k];
-      if (!(k in s.p) && arr.length && arr[arr.length - 1][1] !== null) {
-        arr.push([ts, null]);
-        dirty = true;
-      }
-    }
-    if (dirty) {
+    if (updateHistory(h, s.p, ts)) {
       await writeFile(path, JSON.stringify(h));
       changed++;
     }
   }
 
-  // Media provincial por combustible (solo venta al público), para comparar en el gráfico.
-  // Formato: { "g95": [[ts, media], ...] } — se conservan 400 días.
-  const avgPath = join(DATA, 'avg.json');
-  const avg = await readJson(avgPath, {});
-  const cutoff = ts - 400 * 86400;
-  for (const k of Object.keys(FUELS)) {
-    const vals = stations.filter((s) => !s.r && s.p[k] != null).map((s) => s.p[k]);
-    if (vals.length < 3) continue;
-    const mean = Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 1000) / 1000;
-    const arr = (avg[k] ||= []).filter((x) => x[0] >= cutoff);
-    const last = arr[arr.length - 1];
-    if (!last || last[1] !== mean) arr.push([ts, mean]);
-    avg[k] = arr;
-  }
-  await writeFile(avgPath, JSON.stringify(avg));
+  const avgPath = join(dataDir, 'avg.json');
+  await writeFile(avgPath, JSON.stringify(updateAverages(await readJson(avgPath, {}), stations, ts)));
 
   const latest = {
     fuente: 'Ministerio para la Transición Ecológica — Geoportal de Gasolineras',
-    provincia: PROVINCIA,
+    provincia,
     fechaMinisterio: parseFechaMinisterio(raw.Fecha),
     actualizado: now.toISOString(),
     fuels: FUEL_LABELS,
     estaciones: stations,
   };
-  await writeFile(join(DATA, 'latest.json'), JSON.stringify(latest));
+  await writeFile(join(dataDir, 'latest.json'), JSON.stringify(latest));
 
-  console.log(`OK: ${stations.length} estaciones, ${changed} con cambios de precio (${now.toISOString()})`);
+  log.log(`OK: ${stations.length} estaciones, ${changed} con cambios de precio (${now.toISOString()})`);
+  return { stations: stations.length, changed };
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
-  main().catch((e) => {
+if (process.argv[1] && resolve(fileURLToPath(import.meta.url)) === resolve(process.argv[1])) {
+  run().catch((e) => {
     console.error('ERROR:', e);
     process.exit(1);
   });

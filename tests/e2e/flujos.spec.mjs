@@ -1,0 +1,264 @@
+// Flujos de uso en el móvil
+import { test, expect } from '@playwright/test';
+import { mockData, waitLiveSettled, cardPrices, cardNames, GIRONA, RAW, snapshot } from './helpers.mjs';
+
+test.describe('carga de datos y barra de origen', () => {
+  test('muestra los precios en directo del Ministerio, ordenados por precio', async ({ page }) => {
+    await mockData(page);
+    await page.goto('/');
+    await waitLiveSettled(page);
+
+    const src = page.locator('#source');
+    await expect(src).toHaveAttribute('data-kind', 'live');
+    await expect(src).toContainText('Actualizado a las');
+    await expect(src).toContainText('Origen: en directo del Ministerio');
+    await expect(src).toContainText('Copia horaria:');
+
+    // Gasolina 95 por defecto; la de venta restringida (1004) no sale
+    await expect.poll(() => cardPrices(page)).toEqual(['1,269', '1,279', '1,549', '1,589', '1,629']);
+    await expect.poll(() => cardNames(page)).toEqual(['Petrem', 'Ballenoil', 'Galp', 'Repsol', 'Shell']);
+    await expect(page.locator('#summary')).toContainText('1,269 €');
+    await expect(page.locator('#summary')).toContainText('5');
+    await expect(page.locator('.card').first()).toContainText('Más barata');
+  });
+
+  test('primero enseña la copia horaria y luego la sustituye por el directo', async ({ page }) => {
+    await mockData(page, { live: { delay: 2500 } });
+    await page.goto('/');
+    const src = page.locator('#source');
+    // Copia (1 céntimo más cara) mientras se consulta
+    await expect(page.locator('.card .price .v').first()).toHaveText('1,279');
+    await expect(src).toContainText('Consultando al Ministerio');
+    await expect(src).toContainText('Origen: copia horaria guardada en GitHub');
+    // Llega el directo
+    await expect(src).toHaveAttribute('data-kind', 'live', { timeout: 10_000 });
+    await expect(page.locator('.card .price .v').first()).toHaveText('1,269');
+  });
+
+  test('si el Ministerio no responde, se queda la copia horaria y lo indica; tocar reintenta', async ({ page }) => {
+    let liveOk = false;
+    await mockData(page, {
+      live: (route) => liveOk
+        ? route.fulfill({ status: 200, contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify(RAW) })
+        : route.abort('failed'),
+    });
+    await page.goto('/');
+    await waitLiveSettled(page);
+
+    const src = page.locator('#source');
+    await expect(src).toHaveAttribute('data-kind', 'error');
+    await expect(src).toContainText('Origen: copia horaria guardada en GitHub');
+    await expect(src).toContainText('El Ministerio no responde');
+    await expect(page.locator('.card')).toHaveCount(5);
+    await expect(page.locator('.card .price .v').first()).toHaveText('1,279');
+
+    liveOk = true;
+    await src.click();
+    await expect(src).toHaveAttribute('data-kind', 'live');
+    await expect(page.locator('.card .price .v').first()).toHaveText('1,269');
+  });
+
+  test('sin copia horaria, funciona solo con el directo', async ({ page }) => {
+    await mockData(page, { snap: 'fail' });
+    await page.goto('/');
+    await waitLiveSettled(page);
+    await expect(page.locator('#source')).toHaveAttribute('data-kind', 'live');
+    await expect(page.locator('.card')).toHaveCount(5);
+  });
+
+  test('si fallan las dos fuentes, avisa al usuario', async ({ page }) => {
+    await mockData(page, { snap: 'fail', live: 'fail' });
+    await page.goto('/');
+    await expect(page.locator('#status')).toContainText('No se han podido cargar los datos');
+    await expect(page.locator('#source')).toContainText('Toca para reintentar');
+    await expect(page.locator('.card')).toHaveCount(0);
+  });
+
+  test('una copia horaria de ayer muestra la fecha y "hace X h"', async ({ page }) => {
+    await mockData(page, { live: 'fail', snap: snapshot({ hoursAgo: 26 }) });
+    await page.goto('/');
+    await waitLiveSettled(page);
+    await expect(page.locator('#source .src-main')).toContainText(/Actualizado a las \d+ \w+\.?, \d{2}:\d{2} \(hace 26 h\)/);
+  });
+});
+
+test.describe('filtros', () => {
+  test.beforeEach(async ({ page }) => {
+    await mockData(page);
+    await page.goto('/');
+    await waitLiveSettled(page);
+  });
+
+  test('cambiar de combustible reordena la lista', async ({ page }) => {
+    await page.getByRole('radio', { name: 'Diésel', exact: true }).click();
+    await expect.poll(() => cardPrices(page)).toEqual(['1,589', '1,599', '1,659', '1,689', '1,729']);
+    await page.getByRole('radio', { name: 'GLP / Autogás' }).click();
+    await expect.poll(() => cardNames(page)).toEqual(['Petrem']);
+  });
+
+  test('combustible que solo vende una gasolinera restringida: lista vacía con aviso', async ({ page }) => {
+    await page.getByRole('radio', { name: /Gasóleo B/ }).click();
+    await expect(page.locator('.card')).toHaveCount(0);
+    await expect(page.locator('#status')).toContainText('No hay gasolineras');
+    await page.getByLabel('Incluir venta restringida').check();
+    await expect(page.locator('.card')).toHaveCount(1);
+    await expect(page.locator('.card')).toContainText('Restringida');
+  });
+
+  test('incluir venta restringida añade la cooperativa', async ({ page }) => {
+    await page.getByLabel('Incluir venta restringida').check();
+    await expect(page.locator('.card')).toHaveCount(6);
+    await expect(page.locator('.card').first()).toContainText('Cooperativa Agrícola');
+    await expect(page.locator('.card').first()).toContainText('1,199');
+  });
+
+  test('filtrar por municipio', async ({ page }) => {
+    await page.getByLabel('Municipio').selectOption('Figueres');
+    await expect.poll(() => cardNames(page)).toEqual(['Shell']);
+    await page.getByLabel('Municipio').selectOption('Girona');
+    await expect.poll(() => cardNames(page)).toEqual(['Ballenoil', 'Repsol']);
+    await page.getByLabel('Municipio').selectOption('');
+    await expect(page.locator('.card')).toHaveCount(5);
+  });
+
+  test('buscar por marca o dirección, sin importar acentos ni mayúsculas', async ({ page }) => {
+    const q = page.getByPlaceholder('Buscar marca o dirección…');
+    await q.fill('REPSOL');
+    await expect(page.locator('.card')).toHaveCount(1);
+    await q.fill('dali');
+    await expect.poll(() => cardNames(page)).toEqual(['Shell']);
+    await q.fill('zzzz');
+    await expect(page.locator('.card')).toHaveCount(0);
+    await q.fill('');
+    await expect(page.locator('.card')).toHaveCount(5);
+  });
+
+  test('las preferencias (combustible y municipio) se recuerdan al volver', async ({ page }) => {
+    await page.getByRole('radio', { name: 'Diésel', exact: true }).click();
+    await page.getByLabel('Municipio').selectOption('Girona');
+    await page.reload();
+    await waitLiveSettled(page);
+    await expect(page.getByRole('radio', { name: 'Diésel', exact: true })).toHaveAttribute('aria-checked', 'true');
+    await expect(page.getByLabel('Municipio')).toHaveValue('Girona');
+    await expect.poll(() => cardPrices(page)).toEqual(['1,599', '1,689']);
+  });
+});
+
+test.describe('cerca de mí', () => {
+  test('ordena por precio dentro del radio y luego por distancia', async ({ page, context }) => {
+    await context.grantPermissions(['geolocation']);
+    await context.setGeolocation(GIRONA);
+    await mockData(page);
+    await page.goto('/');
+    await waitLiveSettled(page);
+
+    await page.getByRole('button', { name: 'Cerca de mí' }).click();
+    await expect(page.getByRole('button', { name: 'Cerca de mí' })).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByLabel('Municipio')).toBeDisabled();
+
+    // Radio 10 km por defecto: solo 3 gasolineras
+    await expect.poll(() => cardNames(page)).toEqual(['Petrem', 'Ballenoil', 'Repsol']);
+    await expect(page.locator('.card .meta').first()).toContainText('km');
+
+    await page.getByLabel('Ordenar por').selectOption('dist');
+    await expect.poll(() => cardNames(page)).toEqual(['Repsol', 'Ballenoil', 'Petrem']);
+
+    await page.getByLabel('Radio').selectOption('50');
+    await expect(page.locator('.card')).toHaveCount(5);
+
+    // Desactivar vuelve al filtro por municipio
+    await page.getByRole('button', { name: 'Cerca de mí' }).click();
+    await expect(page.getByLabel('Municipio')).toBeEnabled();
+    await expect(page.locator('#nearControls')).toBeHidden();
+  });
+
+  test('sin permiso de ubicación, explica qué pasa y no se queda bloqueado', async ({ page, context }) => {
+    await context.clearPermissions();
+    await page.addInitScript(() => {
+      navigator.geolocation.getCurrentPosition = (_ok, ko) => setTimeout(() => ko({ code: 1, message: 'denied' }), 50);
+    });
+    await mockData(page);
+    await page.goto('/');
+    await waitLiveSettled(page);
+    await page.getByRole('button', { name: 'Cerca de mí' }).click();
+    await expect(page.locator('#status')).toContainText('Permiso de ubicación denegado');
+    await expect(page.getByRole('button', { name: 'Cerca de mí' })).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.locator('.card')).toHaveCount(5);
+  });
+});
+
+test.describe('ficha de gasolinera', () => {
+  test.beforeEach(async ({ page }) => {
+    await mockData(page);
+    await page.goto('/');
+    await waitLiveSettled(page);
+    await page.locator('.card', { hasText: 'Repsol' }).click();
+  });
+
+  test('muestra precios, horario y enlace para llegar', async ({ page }) => {
+    const dlg = page.locator('#detail');
+    await expect(dlg).toBeVisible();
+    await expect(dlg.locator('#dTitle')).toHaveText('Repsol');
+    await expect(dlg.locator('#dAddr')).toContainText('Carretera N-II Km. 710');
+    await expect(dlg.locator('#dHours')).toContainText('06:00-22:00');
+    await expect(dlg.locator('#dPrices .stat')).toHaveCount(4);
+    await expect(dlg.getByRole('link', { name: 'Cómo llegar' }))
+      .toHaveAttribute('href', 'https://www.google.com/maps/dir/?api=1&destination=41.99,2.82');
+  });
+
+  test('gráfico del histórico: líneas, leyenda, periodos y tooltip', async ({ page }) => {
+    const chart = page.locator('#chart');
+    await expect(chart.locator('svg path.line:not(.ref)')).toHaveCount(1);
+    await expect(chart.locator('svg path.line.ref')).toHaveCount(1);
+    await expect(chart.locator('.legend')).toContainText('Media provincia');
+
+    for (const label of ['7 días', '90 días', 'Todo', '30 días']) {
+      await page.locator('#dRange').getByRole('radio', { name: label }).click();
+      await expect(page.locator('#dRange').getByRole('radio', { name: label })).toHaveAttribute('aria-checked', 'true');
+      await expect(chart.locator('svg path.line:not(.ref)')).toHaveAttribute('d', /^M/);
+    }
+
+    const box = await chart.locator('svg').boundingBox();
+    await page.mouse.move(box.x + box.width * 0.6, box.y + box.height / 2);
+    await expect(chart.locator('.tip')).toBeVisible();
+    await expect(chart.locator('.tip')).toContainText('€');
+    await expect(chart.locator('.tip')).toContainText('Media');
+
+    // Cambiar de combustible en el gráfico
+    await page.locator('#dFuelChips').getByRole('radio', { name: 'Diésel', exact: true }).click();
+    await expect(page.locator('#dFuelChips').getByRole('radio', { name: 'Diésel', exact: true })).toHaveAttribute('aria-checked', 'true');
+  });
+
+  test('tabla de cambios de precio como alternativa al gráfico', async ({ page }) => {
+    await page.getByText('Ver cambios de precio en tabla').click();
+    const rows = page.locator('#dTable tr');
+    expect(await rows.count()).toBeGreaterThan(5);
+    await expect(rows.nth(1)).toContainText('1,589 €');
+  });
+
+  test('se cierra con el botón, con Escape y tocando fuera', async ({ page }) => {
+    const dlg = page.locator('#detail');
+    await page.getByRole('button', { name: 'Cerrar' }).click();
+    await expect(dlg).toBeHidden();
+
+    await page.locator('.card', { hasText: 'Repsol' }).click();
+    await expect(dlg).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(dlg).toBeHidden();
+
+    await page.locator('.card', { hasText: 'Repsol' }).click();
+    await expect(dlg).toBeVisible();
+    await page.mouse.click(5, 5); // fondo del diálogo
+    await expect(dlg).toBeHidden();
+  });
+});
+
+test('gasolinera sin histórico guardado: avisa en vez de romper el gráfico', async ({ page }) => {
+  await mockData(page);
+  await page.route('**/data/h/*.json*', (route) => route.fulfill({ status: 404, body: '' }));
+  await page.goto('/');
+  await waitLiveSettled(page);
+  await page.locator('.card', { hasText: 'Galp' }).click();
+  // Sin histórico se dibuja solo el precio en directo y se explica
+  await expect(page.locator('#chart')).toContainText(/histórico se acumula|Aún no hay histórico/);
+});

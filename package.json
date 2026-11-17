@@ -1,0 +1,22 @@
+{
+  "name": "precios-gasolineras-girona",
+  "private": true,
+  "type": "module",
+  "description": "Precios de carburantes de Girona, actualizados cada hora con datos oficiales del Ministerio",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "collect": "node scripts/collect.mjs",
+    "serve": "node scripts/serve.mjs",
+    "test": "node --test \"tests/unit/*.test.mjs\" \"tests/integration/*.test.mjs\"",
+    "test:unit": "node --test \"tests/unit/*.test.mjs\"",
+    "test:integration": "node --test \"tests/integration/*.test.mjs\"",
+    "test:contract": "node --test \"tests/contract/*.test.mjs\"",
+    "test:e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.10.1",
+    "@playwright/test": "1.49.1"
+  }
+}
