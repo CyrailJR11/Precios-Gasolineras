@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Gasolina Girona</title>
+  <meta name="description" content="Precios de carburantes de las gasolineras de Girona, actualizados cada hora con datos oficiales del Ministerio.">
+  <meta name="theme-color" content="#fcfcfb" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1a1a19" media="(prefers-color-scheme: dark)">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Gasolina GI">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="title-row">
+      <h1>Gasolina Girona</h1>
+      <span id="updated" class="muted small" aria-live="polite">Cargando…</span>
+    </div>
+
+    <div class="chips" id="fuelChips" role="radiogroup" aria-label="Combustible"></div>
+
+    <div class="controls">
+      <label class="field grow">
+        <span class="sr-only">Municipio</span>
+        <select id="muni" aria-label="Municipio">
+          <option value="">Toda la provincia</option>
+        </select>
+      </label>
+      <button id="nearBtn" class="btn" type="button" aria-pressed="false" title="Ordenar por distancia">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M12 2a1 1 0 0 1 1 1v1.06A8 8 0 0 1 19.94 11H21a1 1 0 1 1 0 2h-1.06A8 8 0 0 1 13 19.94V21a1 1 0 1 1-2 0v-1.06A8 8 0 0 1 4.06 13H3a1 1 0 1 1 0-2h1.06A8 8 0 0 1 11 4.06V3a1 1 0 0 1 1-1Zm0 4a6 6 0 1 0 0 12 6 6 0 0 0 0-12Zm0 3a3 3 0 1 1 0 6 3 3 0 0 1 0-6Z"/></svg>
+        Cerca de mí
+      </button>
+    </div>
+
+    <div class="controls" id="nearControls" hidden>
+      <label class="field">
+        <span class="small muted">Radio</span>
+        <select id="radius">
+          <option value="3">3 km</option>
+          <option value="5">5 km</option>
+          <option value="10" selected>10 km</option>
+          <option value="20">20 km</option>
+          <option value="50">50 km</option>
+          <option value="0">Sin límite</option>
+        </select>
+      </label>
+      <label class="field">
+        <span class="small muted">Ordenar por</span>
+        <select id="sort">
+          <option value="price">Precio</option>
+          <option value="dist">Distancia</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="controls">
+      <label class="field grow">
+        <span class="sr-only">Buscar</span>
+        <input id="q" type="search" placeholder="Buscar marca o dirección…" autocomplete="off">
+      </label>
+      <label class="check small">
+        <input type="checkbox" id="showRestricted">
+        <span>Incluir venta restringida</span>
+      </label>
+    </div>
+  </header>
+
+  <main>
+    <section id="summary" class="summary" aria-live="polite"></section>
+    <p id="status" class="muted center" role="status"></p>
+    <ol id="list" class="list"></ol>
+  </main>
+
+  <footer class="foot small muted">
+    Datos: <a href="https://geoportalgasolineras.es" target="_blank" rel="noopener">Geoportal de Gasolineras</a>
+    — Ministerio para la Transición Ecológica. Los precios los comunican las propias estaciones y pueden variar.
+  </footer>
+
+  <!-- Ficha de una gasolinera -->
+  <dialog id="detail" class="sheet" aria-labelledby="dTitle">
+    <div class="sheet-inner">
+      <div class="sheet-head">
+        <div>
+          <h2 id="dTitle"></h2>
+          <p id="dAddr" class="muted small"></p>
+        </div>
+        <button class="icon-btn" id="dClose" type="button" aria-label="Cerrar">
+          <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M6.7 5.3 12 10.6l5.3-5.3a1 1 0 1 1 1.4 1.4L13.4 12l5.3 5.3a1 1 0 0 1-1.4 1.4L12 13.4l-5.3 5.3a1 1 0 0 1-1.4-1.4l5.3-5.3-5.3-5.3a1 1 0 0 1 1.4-1.4Z"/></svg>
+        </button>
+      </div>
+      <p id="dHours" class="small"></p>
+      <div class="actions">
+        <a id="dMaps" class="btn primary" target="_blank" rel="noopener">Cómo llegar</a>
+      </div>
+      <div id="dPrices" class="prices"></div>
+
+      <h3>Histórico de precios</h3>
+      <div class="chips small-chips" id="dFuelChips" role="radiogroup" aria-label="Combustible del gráfico"></div>
+      <div class="chips small-chips" id="dRange" role="radiogroup" aria-label="Periodo">
+        <button type="button" role="radio" data-days="7">7 días</button>
+        <button type="button" role="radio" data-days="30" aria-checked="true">30 días</button>
+        <button type="button" role="radio" data-days="90">90 días</button>
+        <button type="button" role="radio" data-days="0">Todo</button>
+      </div>
+      <div id="chart" class="chart"></div>
+      <details class="table-view">
+        <summary class="small">Ver cambios de precio en tabla</summary>
+        <table id="dTable" class="small"></table>
+      </details>
+    </div>
+  </dialog>
+
+  <script src="app.js" defer></script>
+</body>
+</html>
