@@ -11,44 +11,14 @@ import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { API_BASE, FUELS, FUEL_LABELS, transform, parseFechaMinisterio, isValidResponse } from '../docs/transform.mjs';
+
 const PROVINCIA = process.env.PROVINCIA || '17'; // 17 = Girona
-const API = `https://sedeaplicaciones.minetur.gob.es/ServiciosRESTCarburantes/PreciosCarburantes/EstacionesTerrestres/FiltroProvincia/${PROVINCIA}`;
+const API = API_BASE + PROVINCIA;
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const DATA = join(ROOT, 'docs', 'data');
 const HIST = join(DATA, 'h');
-
-// Clave corta -> [nombre del campo en la API, etiqueta para la web]
-export const FUELS = {
-  g95:  ['Precio Gasolina 95 E5', 'Gasolina 95'],
-  g95p: ['Precio Gasolina 95 E5 Premium', 'Gasolina 95 Premium'],
-  g98:  ['Precio Gasolina 98 E5', 'Gasolina 98'],
-  e10:  ['Precio Gasolina 95 E10', 'Gasolina 95 E10'],
-  gA:   ['Precio Gasoleo A', 'Diésel'],
-  gP:   ['Precio Gasoleo Premium', 'Diésel Premium'],
-  gB:   ['Precio Gasoleo B', 'Gasóleo B (agrícola)'],
-  hvo:  ['Precio Diésel Renovable', 'Diésel renovable (HVO)'],
-  glp:  ['Precio Gases licuados del petróleo', 'GLP / Autogás'],
-  gnc:  ['Precio Gas Natural Comprimido', 'GNC'],
-  adb:  ['Precio Adblue', 'AdBlue'],
-};
-
-const num = (s) => {
-  if (s == null || s === '') return null;
-  const n = parseFloat(String(s).replace(',', '.'));
-  return Number.isFinite(n) ? n : null;
-};
-
-const titleCase = (s) =>
-  String(s || '')
-    .toLowerCase()
-    .replace(/(^|[\s\-/'(.])(\p{L})/gu, (_, a, b) => a + b.toUpperCase())
-    // Carreteras y numerales en mayúsculas: "N-Ii" -> "N-II", "Ap7" -> "AP7", "Gi-555" -> "GI-555"
-    .replace(/[\p{L}\d]+(?:-[\p{L}\d]+)*/gu, (w) =>
-      /\d/.test(w) || /^(n|c|a|b|ap|gi|bv)-/i.test(w)
-        ? w.toUpperCase()
-        : w.replace(/\b[ivx]{2,}\b/gi, (r) => r.toUpperCase()))
-    .trim();
 
 async function fetchWithRetry(url, tries = 4) {
   let lastErr;
@@ -60,7 +30,7 @@ async function fetchWithRetry(url, tries = 4) {
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
-      if (!Array.isArray(json.ListaEESSPrecio) || json.ListaEESSPrecio.length === 0) {
+      if (!isValidResponse(json)) {
         throw new Error('Respuesta sin estaciones');
       }
       return json;
@@ -73,13 +43,6 @@ async function fetchWithRetry(url, tries = 4) {
   throw lastErr;
 }
 
-// "17/11/2026 21:05:28" (hora peninsular) -> ISO con zona Europe/Madrid
-function parseFechaMinisterio(f) {
-  const m = /^(\d{2})\/(\d{2})\/(\d{4}) (\d{2}):(\d{2}):(\d{2})$/.exec(f || '');
-  if (!m) return null;
-  return `${m[3]}-${m[2]}-${m[1]}T${m[4]}:${m[5]}:${m[6]}`;
-}
-
 async function readJson(path, fallback) {
   if (!existsSync(path)) return fallback;
   try {
@@ -87,30 +50,6 @@ async function readJson(path, fallback) {
   } catch {
     return fallback;
   }
-}
-
-export function transform(raw) {
-  return raw.ListaEESSPrecio.map((e) => {
-    const p = {};
-    for (const [k, [field]] of Object.entries(FUELS)) {
-      const v = num(e[field]);
-      if (v != null && v > 0) p[k] = v;
-    }
-    return {
-      id: e['IDEESS'],
-      n: titleCase(e['Rótulo']) || 'Sin rótulo',
-      d: titleCase(e['Dirección']),
-      m: e['Municipio'],
-      l: titleCase(e['Localidad']),
-      cp: e['C.P.'],
-      lat: num(e['Latitud']),
-      lon: num(e['Longitud (WGS84)']),
-      h: e['Horario'],
-      // Tipo Venta: P = público, R = restringido (socios / flotas)
-      r: e['Tipo Venta'] === 'R' ? 1 : 0,
-      p,
-    };
-  });
 }
 
 async function main() {
@@ -170,7 +109,7 @@ async function main() {
     provincia: PROVINCIA,
     fechaMinisterio: parseFechaMinisterio(raw.Fecha),
     actualizado: now.toISOString(),
-    fuels: Object.fromEntries(Object.entries(FUELS).map(([k, [, label]]) => [k, label])),
+    fuels: FUEL_LABELS,
     estaciones: stations,
   };
   await writeFile(join(DATA, 'latest.json'), JSON.stringify(latest));

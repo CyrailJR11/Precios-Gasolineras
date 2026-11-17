@@ -13,6 +13,11 @@ Los precios se actualizan cada hora y se guarda el histórico.
 GitHub Actions (cada hora) ──► scripts/collect.mjs ──► docs/data/*.json ──► GitHub Pages (docs/)
 ```
 
+Al abrir la web se muestra al instante la copia guardada y, a la vez, se piden los precios **en directo**
+a la API del Ministerio. Si responde, la cabecera pasa a "En directo HH:MM"; si no, se queda la copia
+("Guardado HH:MM"). Tocar esa etiqueta vuelve a consultar. La tarea horaria sigue siendo la que guarda
+el histórico para los gráficos. `docs/transform.mjs` es el código común a la web y al recolector.
+
 | Archivo | Contenido |
 |---|---|
 | `docs/data/latest.json` | Precios actuales de todas las gasolineras |

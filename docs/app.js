@@ -1,6 +1,6 @@
-'use strict';
+import { API_BASE, FUEL_LABELS, transform, isValidResponse, parseFechaMinisterio } from './transform.mjs';
 
-const $ = (s) => document.querySelector(s);
+const $ =(s) => document.querySelector(s);
 const FUEL_ORDER = ['g95', 'gA', 'g98', 'gP', 'g95p', 'e10', 'glp', 'hvo', 'gB', 'gnc', 'adb'];
 const PAGE = 50;
 
@@ -36,20 +36,63 @@ function haversine(a, b) {
 }
 
 // ---------- Carga ----------
-async function load() {
+// 1) Se muestra al instante la copia guardada por la tarea horaria (data/latest.json).
+// 2) En paralelo se piden los precios en directo al Ministerio y, si llegan, sustituyen a la copia.
+const PROVINCIA = '17';
+const LIVE_TIMEOUT = 25000;
+let liveInFlight = null;
+
+async function fetchSnapshot() {
+  const res = await fetch('data/latest.json', { cache: 'no-cache' });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  return { ...(await res.json()), live: false };
+}
+
+async function fetchLive() {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), LIVE_TIMEOUT);
   try {
-    const res = await fetch('data/latest.json', { cache: 'no-cache' });
+    const res = await fetch(API_BASE + PROVINCIA, { signal: ctrl.signal, cache: 'no-store' });
     if (!res.ok) throw new Error('HTTP ' + res.status);
-    state.data = await res.json();
-  } catch (e) {
-    $('#status').textContent = 'No se han podido cargar los datos. Revisa la conexión y vuelve a intentarlo.';
-    $('#updated').textContent = '';
-    return;
+    const raw = await res.json();
+    if (!isValidResponse(raw)) throw new Error('Respuesta sin estaciones');
+    return {
+      fechaMinisterio: parseFechaMinisterio(raw.Fecha),
+      actualizado: new Date().toISOString(),
+      fuels: FUEL_LABELS,
+      estaciones: transform(raw),
+      live: true,
+    };
+  } finally {
+    clearTimeout(timer);
   }
+}
+
+function refreshLive() {
+  if (liveInFlight) return liveInFlight;
+  setUpdated('loading');
+  liveInFlight = fetchLive()
+    .then((d) => { liveInFlight = null; apply(d); return true; })
+    .catch(() => { liveInFlight = null; setUpdated(); return false; });
+  return liveInFlight;
+}
+
+function setUpdated(mode) {
+  const el = $('#updated');
   const d = state.data;
+  if (!d) { el.textContent = mode === 'loading' ? 'Cargando…' : ''; return; }
   const upd = new Date(d.actualizado);
-  $('#updated').textContent = 'Act. ' + fmtDate(upd, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-  $('#updated').title = 'Última consulta al Ministerio: ' + fmtDate(upd, { dateStyle: 'full', timeStyle: 'short' });
+  const hhmm = fmtDate(upd, { hour: '2-digit', minute: '2-digit' });
+  const when = Date.now() - upd < 20 * 3600 * 1000 ? hhmm : fmtDate(upd, { day: 'numeric', month: 'short' }) + ', ' + hhmm;
+  el.textContent = mode === 'loading' ? 'Actualizando…' : (d.live ? 'En directo ' : 'Guardado ') + when;
+  el.title = (d.live ? 'Precios consultados en directo al Ministerio: ' : 'Copia guardada por la tarea horaria: ')
+    + fmtDate(upd, { dateStyle: 'full', timeStyle: 'short' }) + '. Toca para actualizar.';
+}
+
+function apply(d) {
+  // No sustituir datos en directo por una copia guardada más antigua
+  if (state.data && state.data.live && !d.live) return;
+  state.data = d;
 
   // Combustibles disponibles en la provincia
   const present = FUEL_ORDER.filter((k) => d.estaciones.some((s) => s.p[k] != null));
@@ -61,11 +104,27 @@ async function load() {
   // Municipios
   const munis = [...new Set(d.estaciones.map((s) => s.m))].sort((a, b) => a.localeCompare(b, 'es'));
   const sel = $('#muni');
+  sel.length = 1; // deja "Toda la provincia"
   for (const m of munis) sel.add(new Option(m, m));
   if (!munis.includes(state.muni)) state.muni = '';
   sel.value = state.muni;
 
+  setUpdated(liveInFlight ? 'loading' : undefined);
   render();
+}
+
+async function load() {
+  setUpdated('loading');
+  const live = refreshLive();
+  try {
+    apply(await fetchSnapshot());
+    if (liveInFlight) setUpdated('loading');
+  } catch { /* sin copia guardada: se espera al directo */ }
+  const ok = await live;
+  if (!ok && !state.data) {
+    $('#status').textContent = 'No se han podido cargar los datos. Revisa la conexión y vuelve a intentarlo.';
+    $('#updated').textContent = '';
+  }
 }
 
 function renderChips(container, items, current, onPick) {
@@ -249,8 +308,13 @@ function drawChart() {
   const table = $('#dTable');
   if (!detail.hist) return;
   const k = detail.fuel;
-  const full = detail.hist[k] || [];
   const nowTs = Math.floor(Date.now() / 1000);
+  const full = (detail.hist[k] || []).slice();
+  // Si el precio en directo es más nuevo que el último guardado, se añade al final
+  const cur = detail.st.p[k];
+  if (cur != null && (!full.length || full[full.length - 1][1] !== cur)) {
+    full.push([Math.max(nowTs - 60, full.length ? full[full.length - 1][0] + 1 : 0), cur]);
+  }
   const firstTs = full.length ? full[0][0] : nowTs;
   const t1 = nowTs;
   const t0 = detail.days ? Math.max(firstTs, t1 - detail.days * 86400) : firstTs;
@@ -366,9 +430,10 @@ $('#dRange').addEventListener('click', (e) => {
 });
 let rz; window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { if ($('#detail').open) drawChart(); }, 150); });
 document.addEventListener('visibilitychange', () => {
-  // Al volver a la app tras un rato, recarga los datos
-  if (document.visibilityState === 'visible' && state.data && Date.now() - new Date(state.data.actualizado) > 65 * 60 * 1000) location.reload();
+  // Al volver a la app tras más de 5 minutos, pide de nuevo los precios en directo
+  if (document.visibilityState === 'visible' && state.data && Date.now() - new Date(state.data.actualizado) > 5 * 60 * 1000) refreshLive();
 });
+$('#updated').addEventListener('click', () => refreshLive());
 
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
   navigator.serviceWorker.register('sw.js').catch(() => {});

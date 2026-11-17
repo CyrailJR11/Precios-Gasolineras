@@ -75,7 +75,8 @@ a { color: var(--accent-ink); }
   display: grid; gap: 8px;
 }
 .title-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
-h1 { font-size: 20px; margin: 0; letter-spacing: -.01em; }
+h1 { font-size: 20px; margin: 0; letter-spacing: -.01em; white-space: nowrap; }
+.updated { border: 0; background: transparent; font: inherit; font-size: 13px; padding: 6px 0; cursor: pointer; text-align: right; }
 
 .chips { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin: 0 -16px; padding: 2px 16px; }
 .chips::-webkit-scrollbar { display: none; }
