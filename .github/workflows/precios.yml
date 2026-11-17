@@ -2,8 +2,10 @@ name: Actualizar precios
 
 on:
   schedule:
-    # Cada hora, en el minuto 7 (UTC). GitHub puede retrasarlo algunos minutos.
-    - cron: '7 * * * *'
+    # Dos veces por hora, en los minutos 23 y 53 (UTC). GitHub retrasa o descarta ejecuciones
+    # programadas cuando tiene mucha carga, sobre todo al principio de cada hora; así se evita
+    # esa franja y, si se pierde una, la siguiente llega 30 minutos después.
+    - cron: '23,53 * * * *'
   workflow_dispatch: {}
 
 permissions:

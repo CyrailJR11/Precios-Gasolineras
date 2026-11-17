@@ -10,7 +10,7 @@ Los precios se actualizan cada hora y se guarda el histórico.
 ## Cómo funciona
 
 ```
-GitHub Actions (cada hora) ──► scripts/collect.mjs ──► docs/data/*.json ──► GitHub Pages (docs/)
+GitHub Actions (cada 30 min) ──► scripts/collect.mjs ──► docs/data/*.json ──► GitHub Pages (docs/)
 ```
 
 Al abrir la web se muestra al instante la copia guardada y, a la vez, se piden los precios **en directo**
