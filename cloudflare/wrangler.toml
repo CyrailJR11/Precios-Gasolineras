@@ -1,0 +1,13 @@
+# Configuración del Worker que lanza la tarea de precios (plan gratuito de Cloudflare).
+# Desplegado desde Claude con la API de Cloudflare; con Wrangler sería: npx wrangler deploy
+name = "gasolina-girona-cron"
+main = "worker.js"
+compatibility_date = "2025-11-01"
+workers_dev = false
+
+[triggers]
+# Minutos 8 y 38 (UTC): intercalado con la programación propia de GitHub (23 y 53)
+crons = ["8,38 * * * *"]
+
+[observability]
+enabled = true
