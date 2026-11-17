@@ -71,8 +71,10 @@ test.describe('diseño adaptable', () => {
     await mockData(page);
     await page.goto('/');
     await waitLiveSettled(page);
-    await page.mouse.wheel(0, 2000);
-    await page.evaluate(() => window.scrollTo(0, 2000));
+    // Más contenido para que haya scroll incluso en pantallas grandes
+    await page.getByLabel('Incluir venta restringida').check();
+    await page.evaluate(() => { document.querySelector('main').style.paddingBottom = '2000px'; window.scrollTo(0, 1500); });
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(100);
     const top = await page.locator('header.top').boundingBox();
     expect(Math.round(top.y)).toBe(0);
   });
