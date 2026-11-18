@@ -2,9 +2,12 @@
 <html lang="es">
 <head>
   <meta charset="utf-8">
+  <!-- Solo se cargan recursos de la propia web y solo se piden datos a la API del Ministerio -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://sedeaplicaciones.minetur.gob.es; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Gasolina Girona</title>
-  <meta name="description" content="Precios de carburantes de las gasolineras de Girona, actualizados cada hora con datos oficiales del Ministerio.">
+  <meta name="description" content="Precios de carburantes de las gasolineras de Girona, actualizados cada 30 minutos con datos oficiales del Ministerio.">
   <meta name="theme-color" content="#fcfcfb" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#1a1a19" media="(prefers-color-scheme: dark)">
   <link rel="manifest" href="manifest.webmanifest">
