@@ -49,6 +49,10 @@ test.describe('accesibilidad (axe, WCAG 2.1 AA)', () => {
       const box = await page.locator(sel).first().boundingBox();
       expect(box.height, sel).toBeGreaterThanOrEqual(40);
     }
+    // La barra de actualizar es compacta pero se puede pulsar con el dedo
+    const src = await page.locator('#source').boundingBox();
+    expect(src.height).toBeGreaterThanOrEqual(44);
+    expect(src.height).toBeLessThanOrEqual(56);
   });
 });
 

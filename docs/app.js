@@ -117,18 +117,18 @@ function renderSource() {
     const at = new Date(d.actualizado);
     kind = d.live ? 'live' : meta.liveError ? 'error' : 'saved';
     main = `Actualizado a las ${fmtWhen(at)} (${fmtAgo(at)})`;
-    const origin = d.live
-      ? 'Origen: en directo del Ministerio'
-      : 'Origen: copia horaria guardada en GitHub';
+    const origin = d.live ? 'En directo del Ministerio' : 'Copia de GitHub';
     let extra;
     if (meta.loading) extra = 'Consultando al Ministerio…';
-    else if (meta.liveError) extra = 'El Ministerio no responde ahora · Toca para reintentar';
-    else if (d.live) extra = meta.snapshotAt ? `Copia horaria: ${fmtWhen(meta.snapshotAt)} · Toca para actualizar` : 'Toca para actualizar';
-    else extra = 'Toca para consultar en directo';
-    sub = `${origin}<br>${extra}`;
+    else if (meta.liveError) extra = 'El Ministerio no responde, toca para reintentar';
+    else if (d.live) extra = meta.snapshotAt ? `copia ${fmtWhen(meta.snapshotAt)}` : '';
+    else extra = 'toca para ver en directo';
+    sub = extra ? `${origin} · ${extra}` : origin;
   }
   el.dataset.kind = kind;
-  el.innerHTML = `<span class="src-dot" aria-hidden="true"></span><span class="src-text"><span class="src-main">${esc(main)}</span>${sub ? `<span class="src-sub">${sub}</span>` : ''}</span>`;
+  // Icono de actualizar a la derecha: deja claro que la barra se puede tocar
+  el.innerHTML = `<span class="src-dot" aria-hidden="true"></span><span class="src-text"><span class="src-main">${esc(main)}</span>${sub ? `<span class="src-sub">${esc(sub)}</span>` : ''}</span>`
+    + '<svg class="src-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v5h-5"/></svg>';
   el.setAttribute('aria-busy', String(meta.loading));
 }
 

@@ -11,8 +11,8 @@ test.describe('carga de datos y barra de origen', () => {
     const src = page.locator('#source');
     await expect(src).toHaveAttribute('data-kind', 'live');
     await expect(src).toContainText('Actualizado a las');
-    await expect(src).toContainText('Origen: en directo del Ministerio');
-    await expect(src).toContainText('Copia horaria:');
+    await expect(src).toContainText('En directo del Ministerio');
+    await expect(src).toContainText(/copia \d{2}:\d{2}/);
 
     // Gasolina 95 por defecto; la de venta restringida (1004) no sale
     await expect.poll(() => cardPrices(page)).toEqual(['1,269', '1,279', '1,549', '1,589', '1,629']);
@@ -29,7 +29,7 @@ test.describe('carga de datos y barra de origen', () => {
     // Copia (1 céntimo más cara) mientras se consulta
     await expect(page.locator('.card .price .v').first()).toHaveText('1,279');
     await expect(src).toContainText('Consultando al Ministerio');
-    await expect(src).toContainText('Origen: copia horaria guardada en GitHub');
+    await expect(src).toContainText('Copia de GitHub');
     // Llega el directo
     await expect(src).toHaveAttribute('data-kind', 'live', { timeout: 10_000 });
     await expect(page.locator('.card .price .v').first()).toHaveText('1,269');
@@ -47,7 +47,7 @@ test.describe('carga de datos y barra de origen', () => {
 
     const src = page.locator('#source');
     await expect(src).toHaveAttribute('data-kind', 'error');
-    await expect(src).toContainText('Origen: copia horaria guardada en GitHub');
+    await expect(src).toContainText('Copia de GitHub');
     await expect(src).toContainText('El Ministerio no responde');
     await expect(page.locator('.card')).toHaveCount(5);
     await expect(page.locator('.card .price .v').first()).toHaveText('1,279');
