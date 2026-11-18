@@ -18,7 +18,8 @@ const state = {
   radius: store.get('radius', 10),
   sort: store.get('sort', 'price'),
   q: '',
-  restricted: store.get('restricted', false),
+  // La casilla «Incluir venta restringida» está oculta: siempre se incluyen (salen con la etiqueta «Restringida»)
+  restricted: true,
   shown: PAGE,
 };
 
@@ -237,7 +238,7 @@ function render() {
     const dc = (v - avg) * 100; // céntimos
     const li = document.createElement('li');
     const deltaTxt = rows.length > 1 && Math.abs(dc) >= 0.05
-      ? `<div class="delta ${dc < 0 ? 'below' : 'above'}">${dc < 0 ? '−' : '+'}${Math.abs(dc).toFixed(1).replace('.', ',')} cts vs media</div>` : '';
+      ? `<div class="delta ${dc < 0 ? 'below' : 'above'}">${dc < 0 ? '−' : '+'}${Math.abs(dc).toFixed(1).replace('.', ',')} cts. vs. media</div>` : '';
     const badges = [
       v === min && rows.length > 1 ? '<span class="badge">Más barata</span>' : '',
       s.r ? '<span class="badge neutral">Restringida</span>' : '',
@@ -285,7 +286,7 @@ function locate() {
       $('#muni').disabled = false;
       render();
       $('#status').textContent = err.code === 1
-        ? 'Permiso de ubicación denegado. Actívalo en los ajustes del navegador para usar "Cerca de mí".'
+        ? 'Permiso de ubicación denegado. Actívalo en los ajustes del navegador para usar «Cerca de mí».'
         : 'No se ha podido obtener tu ubicación.';
     },
     { enableHighAccuracy: false, timeout: 15000, maximumAge: 120000 },

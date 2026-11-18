@@ -369,3 +369,8 @@ body {
   .card, .chips button, .btn { animation: none !important; transition: none !important; }
   .card:active, .btn:active, .chips button:active { transform: none; }
 }
+
+/* Título y controles de "Cerca de mí" (Radio y Ordenar por) centrados */
+.top h1 { text-align: center; }
+#nearControls { justify-content: center; }
+#nearControls .field { text-align: center; }

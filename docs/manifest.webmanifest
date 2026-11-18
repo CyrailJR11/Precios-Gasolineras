@@ -1,7 +1,7 @@
 {
   "name": "Gasolina Girona",
   "short_name": "Gasolina GI",
-  "description": "Precios de carburantes de Girona actualizados cada hora (datos oficiales del Ministerio).",
+  "description": "Precios de carburantes de Girona actualizados cada 30 minutos (datos oficiales del Ministerio).",
   "lang": "es",
   "start_url": "./",
   "scope": "./",

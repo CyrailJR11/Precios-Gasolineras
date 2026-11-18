@@ -36,6 +36,9 @@ const titleCase = (s) =>
       /\d/.test(w) || /^(n|c|a|b|ap|gi|bv)-/i.test(w)
         ? w.toUpperCase()
         : w.replace(/\b[ivx]{2,}\b/gi, (r) => r.toUpperCase()))
+    // Artículos y preposiciones en minúscula salvo al principio: "Sarria De Ter" -> "Sarria de Ter"
+    .replace(/(?<=\s)(De|Del|La|Las|Les|Los|El|Els|I|Y)(?=\s)/gu, (w) => w.toLowerCase())
+    .replace(/(?<=\s)([DL])'(?=\p{L})/gu, (w) => w.toLowerCase())
     .trim();
 
 // "17/11/2026 21:05:28" (hora peninsular) -> "2026-11-17T21:05:28"
