@@ -92,6 +92,32 @@ test.describe('temas claro y oscuro', () => {
 });
 
 test.describe('seguridad', () => {
+  test('la política de seguridad (CSP) no bloquea nada de la web y prohíbe lo demás', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.__csp = [];
+      document.addEventListener('securitypolicyviolation', (e) => window.__csp.push(`${e.violatedDirective} ${e.blockedURI}`));
+    });
+    await mockData(page);
+    await page.goto('/');
+    await waitLiveSettled(page);
+    await page.locator('.card').first().click();
+    await expect(page.locator('#chart svg')).toBeVisible();
+    expect(await page.evaluate(() => window.__csp)).toEqual([]);
+    const csp = await page.locator('meta[http-equiv="Content-Security-Policy"]').getAttribute('content');
+    expect(csp).toContain("script-src 'self'");
+    expect(csp).toContain("object-src 'none'");
+    // Un script inyectado en la página no se ejecuta
+    const ran = await page.evaluate(() => new Promise((ok) => {
+      window.__inline = false;
+      document.addEventListener('securitypolicyviolation', () => ok(window.__inline), { once: true });
+      const s = document.createElement('script');
+      s.textContent = 'window.__inline = true';
+      document.body.appendChild(s);
+      setTimeout(() => ok(window.__inline), 1000);
+    }));
+    expect(ran).toBe(false);
+  });
+
   test('textos del Ministerio con HTML se muestran como texto, sin ejecutarse', async ({ page }) => {
     const evil = JSON.parse(JSON.stringify(RAW));
     evil.ListaEESSPrecio[0]['Rótulo'] = '<img src=x onerror="window.__xss=1">';
