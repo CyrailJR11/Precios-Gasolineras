@@ -148,6 +148,7 @@ main { padding: 12px 16px 8px; max-width: 760px; margin: 0 auto; }
 .more { display: block; margin: 12px auto; }
 
 .foot { padding: 8px 16px 24px; max-width: 760px; margin: 0 auto; }
+.foot .copy { margin: 8px 0 0; padding-top: 8px; border-top: 1px solid var(--border); text-align: center; }
 
 /* Ficha */
 .sheet {
