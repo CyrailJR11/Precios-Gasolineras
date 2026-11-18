@@ -1,0 +1,32 @@
+name: Vigilancia
+
+# Comprueba desde fuera que la web, los datos, la tarea de precios y la API del Ministerio funcionan.
+# Si algo falla, la ejecución termina en error y GitHub manda un correo (Settings → Notifications →
+# System → Actions: "Notify me on failed workflows only" + Email). No muestra nada en la web.
+on:
+  schedule:
+    # Cada 2 horas en el minuto 41 (UTC), lejos de la franja de más carga de GitHub
+    - cron: '41 */2 * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: vigilancia
+  cancel-in-progress: false
+
+jobs:
+  vigilar:
+    name: Comprobar que todo funciona
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - run: node scripts/vigilar.mjs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

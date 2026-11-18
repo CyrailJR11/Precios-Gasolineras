@@ -2,7 +2,7 @@
   "name": "precios-gasolineras-girona",
   "private": true,
   "type": "module",
-  "description": "Precios de carburantes de Girona, actualizados cada hora con datos oficiales del Ministerio",
+  "description": "Precios de carburantes de Girona, actualizados cada 30 minutos con datos oficiales del Ministerio",
   "engines": {
     "node": ">=20"
   },
