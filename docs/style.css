@@ -187,3 +187,173 @@ main { padding: 12px 16px 8px; max-width: 760px; margin: 0 auto; }
 .table-view table { width: 100%; border-collapse: collapse; margin-top: 6px; font-variant-numeric: tabular-nums; }
 .table-view td, .table-view th { padding: 4px 6px; border-bottom: 1px solid var(--border); text-align: left; }
 .table-view td:last-child, .table-view th:last-child { text-align: right; }
+
+/* =====================================================================
+   Tema de color: colores y efectos sobre el mismo diseño (no mueve nada).
+   - Cada combustible tiene su color (chips, precios de la ficha y gráfico).
+   - Barato en verde y caro en rojo, con una franja a la izquierda de cada tarjeta.
+   - Todos los colores con texto blanco encima tienen contraste >= 4.5:1.
+   ===================================================================== */
+:root {
+  --hdr: linear-gradient(135deg, #1e40af 0%, #2563eb 55%, #0e7490 100%);
+  --hdr-glow: rgba(37, 99, 235, .28);
+  --cheap-soft: #e9f7ea;
+  --bad-soft: #fdeceb;
+  --warn-soft: #fef3c7; --warn-ink: #92400e;
+  --tile-1: #0a7d0a; --tile-2: #2563eb; --tile-3: #7c3aed;
+  --glow: rgba(10, 125, 10, .22);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --hdr: linear-gradient(135deg, #172554 0%, #1e3a8a 55%, #134e4a 100%);
+    --hdr-glow: rgba(0, 0, 0, .4);
+    --cheap-soft: #172b18; --bad-soft: #2f1a1a;
+    --warn-soft: #3b2a0a; --warn-ink: #fcd34d;
+    --tile-1: #4cc44c; --tile-2: #60a5fa; --tile-3: #a78bfa;
+    --glow: rgba(76, 196, 76, .18);
+    --shadow: 0 0 0 transparent; /* 'none' anularía las franjas de color combinadas con la sombra */
+  }
+}
+:root[data-theme="dark"] {
+  --hdr: linear-gradient(135deg, #172554 0%, #1e3a8a 55%, #134e4a 100%);
+  --hdr-glow: rgba(0, 0, 0, .4);
+  --cheap-soft: #172b18; --bad-soft: #2f1a1a;
+  --warn-soft: #3b2a0a; --warn-ink: #fcd34d;
+  --tile-1: #4cc44c; --tile-2: #60a5fa; --tile-3: #a78bfa;
+  --glow: rgba(76, 196, 76, .18);
+  --shadow: 0 0 0 transparent;
+}
+
+/* Colores por combustible (familias: gasolinas verde/violeta, diésel naranja/rojo, gases azul) */
+[data-k="g95"]  { --fuel: #15803d; }
+[data-k="e10"]  { --fuel: #0f766e; }
+[data-k="g95p"] { --fuel: #a21caf; }
+[data-k="g98"]  { --fuel: #7e22ce; }
+[data-k="gA"]   { --fuel: #c2410c; }
+[data-k="gP"]   { --fuel: #be123c; }
+[data-k="gB"]   { --fuel: #b91c1c; }
+[data-k="hvo"]  { --fuel: #3f6212; }
+[data-k="glp"]  { --fuel: #0369a1; }
+[data-k="gnc"]  { --fuel: #4338ca; }
+[data-k="adb"]  { --fuel: #1d4ed8; }
+
+/* Fondo con un toque de color (el color base sigue siendo --surface-0) */
+body {
+  background-image:
+    radial-gradient(120% 60% at 100% 0%, rgba(37, 99, 235, .07), transparent 60%),
+    radial-gradient(90% 50% at 0% 100%, rgba(14, 116, 144, .06), transparent 60%);
+  background-attachment: scroll;
+  min-height: 100vh;
+}
+
+/* Cabecera con degradado */
+.top {
+  background: var(--hdr);
+  border-bottom-color: transparent;
+  box-shadow: 0 4px 18px var(--hdr-glow);
+}
+.top h1 { color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, .25); }
+.top .check, .top .field .muted { color: #fff; }
+.top .check input { accent-color: #fff; }
+.top .source { border-color: transparent; box-shadow: 0 1px 3px rgba(0, 0, 0, .15); }
+.top select, .top input[type="search"] { border-color: transparent; box-shadow: 0 1px 3px rgba(0, 0, 0, .15); }
+.top select:focus-visible, .top input[type="search"]:focus-visible, .top .btn:focus-visible,
+.top .source:focus-visible, .chips button:focus-visible { outline: 3px solid #fde047; outline-offset: 2px; }
+.top .btn { border-color: transparent; box-shadow: 0 1px 3px rgba(0, 0, 0, .15); }
+.top .btn[aria-pressed="true"] { background: #fde047; color: #1e293b; border-color: #fde047; }
+
+/* Punto de estado: halo que "late" cuando los precios están en directo */
+.source[data-kind="live"] .src-dot { box-shadow: 0 0 0 0 rgba(10, 125, 10, .5); animation: live 2.4s ease-out infinite; }
+@keyframes live { 0% { box-shadow: 0 0 0 0 rgba(10, 125, 10, .5); } 70%, 100% { box-shadow: 0 0 0 7px rgba(10, 125, 10, 0); } }
+
+/* Chips de combustible: punto de color y, al elegirlo, fondo del color del combustible */
+.chips button { transition: background-color .2s, box-shadow .2s, transform .12s; }
+.chips button[data-k]::before {
+  content: ""; display: inline-block; width: 9px; height: 9px; border-radius: 50%;
+  margin-right: 6px; vertical-align: 1px; background: var(--fuel);
+}
+.chips button[aria-checked="true"] {
+  background: var(--fuel, var(--accent-fill)); border-color: var(--fuel, var(--accent-fill)); color: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .2), inset 0 0 0 2px rgba(255, 255, 255, .3);
+}
+.chips button[aria-checked="true"]::before { background: #fff; }
+.top .chips button { border-color: transparent; }
+.chips button:active { transform: scale(.96); }
+
+/* Resumen: cada dato con su color */
+.stat { position: relative; }
+.summary .stat { box-shadow: inset 0 3px 0 var(--tile, transparent), var(--shadow); }
+.summary .stat:nth-child(1) { --tile: var(--tile-1); background: linear-gradient(180deg, var(--cheap-soft), var(--surface-1) 75%); }
+.summary .stat:nth-child(1) .v { color: var(--good); }
+.summary .stat:nth-child(2) { --tile: var(--tile-2); }
+.summary .stat:nth-child(3) { --tile: var(--tile-3); }
+
+/* Tarjetas: franja verde si es más barata que la media, roja si es más cara */
+.card { transition: transform .12s ease, box-shadow .2s ease; animation: rise .35s ease both; }
+.card:active { transform: scale(.985); }
+.card:has(.delta.below) { box-shadow: inset 5px 0 0 var(--good), var(--shadow); }
+.card:has(.delta.above) { box-shadow: inset 5px 0 0 var(--bad), var(--shadow); }
+.card:has(.delta.below) .price .v { color: var(--good); }
+.card:has(.delta.above) .price .v { color: var(--bad); }
+.delta.above { color: var(--bad); }
+.delta.below, .delta.above { font-weight: 600; }
+/* La más barata destaca con fondo verde suave y brillo */
+.card:has(.badge:not(.neutral)) {
+  background: linear-gradient(135deg, var(--cheap-soft), var(--surface-1) 70%);
+  border-color: var(--good);
+  box-shadow: inset 5px 0 0 var(--good), 0 4px 16px var(--glow);
+}
+@keyframes rise { from { transform: translateY(8px); } to { transform: none; } }
+
+.badge:not(.neutral) {
+  background: linear-gradient(135deg, #0a7d0a, #0f766e); color: #fff;
+  box-shadow: 0 1px 4px rgba(10, 125, 10, .35);
+}
+.badge.neutral { background: var(--warn-soft); color: var(--warn-ink); border-color: transparent; }
+
+.btn { transition: transform .12s ease, box-shadow .2s ease; }
+.btn:active { transform: scale(.97); }
+.btn.primary {
+  background: linear-gradient(135deg, #1d4ed8, #6d28d9); border-color: transparent;
+  box-shadow: 0 3px 12px rgba(79, 70, 229, .35);
+}
+.btn.more { background: var(--accent-soft); border-color: transparent; color: var(--accent-ink); font-weight: 600; }
+
+/* Ficha: franja de color arriba y precios con el color de cada combustible */
+.sheet {
+  background: linear-gradient(90deg, #1e40af, #2563eb 50%, #0e7490) top / 100% 6px no-repeat, var(--surface-1);
+  box-shadow: 0 -8px 30px rgba(0, 0, 0, .25);
+}
+.sheet::backdrop { background: rgba(15, 23, 42, .55); backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); }
+.prices .stat[data-k] { box-shadow: inset 4px 0 0 var(--fuel); }
+
+/* Gráfico con el color del combustible elegido */
+#detail:has(#dFuelChips [data-k="g95"][aria-checked="true"])  { --series-1: #15803d; }
+#detail:has(#dFuelChips [data-k="e10"][aria-checked="true"])  { --series-1: #0f766e; }
+#detail:has(#dFuelChips [data-k="g95p"][aria-checked="true"]) { --series-1: #a21caf; }
+#detail:has(#dFuelChips [data-k="g98"][aria-checked="true"])  { --series-1: #7e22ce; }
+#detail:has(#dFuelChips [data-k="gA"][aria-checked="true"])   { --series-1: #c2410c; }
+#detail:has(#dFuelChips [data-k="gP"][aria-checked="true"])   { --series-1: #be123c; }
+#detail:has(#dFuelChips [data-k="gB"][aria-checked="true"])   { --series-1: #b91c1c; }
+#detail:has(#dFuelChips [data-k="hvo"][aria-checked="true"])  { --series-1: #3f6212; }
+#detail:has(#dFuelChips [data-k="glp"][aria-checked="true"])  { --series-1: #0369a1; }
+#detail:has(#dFuelChips [data-k="gnc"][aria-checked="true"])  { --series-1: #4338ca; }
+#detail:has(#dFuelChips [data-k="adb"][aria-checked="true"])  { --series-1: #1d4ed8; }
+.chart .line:not(.ref) { stroke-width: 2.5; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .15)); }
+/* En modo oscuro las líneas se aclaran para que se vean bien sobre fondo oscuro */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .chart .line:not(.ref),
+  :root:not([data-theme="light"]) .chart .dot,
+  :root:not([data-theme="light"]) .legend i:not(.ref) { --series-1-d: color-mix(in srgb, var(--series-1) 65%, #fff); }
+}
+:root[data-theme="dark"] .chart .line:not(.ref),
+:root[data-theme="dark"] .chart .dot,
+:root[data-theme="dark"] .legend i:not(.ref) { --series-1-d: color-mix(in srgb, var(--series-1) 65%, #fff); }
+.chart .line:not(.ref) { stroke: var(--series-1-d, var(--series-1)); }
+.chart .dot { fill: var(--series-1-d, var(--series-1)); }
+.legend i:not(.ref) { border-top-color: var(--series-1-d, var(--series-1)); }
+
+@media (prefers-reduced-motion: reduce) {
+  .card, .chips button, .btn { animation: none !important; transition: none !important; }
+  .card:active, .btn:active, .chips button:active { transform: none; }
+}

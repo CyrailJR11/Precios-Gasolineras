@@ -307,7 +307,7 @@ async function openDetail(id) {
   $('#dMaps').href = `https://www.google.com/maps/dir/?api=1&destination=${s.lat},${s.lon}`;
   const fuels = FUEL_ORDER.filter((k) => s.p[k] != null);
   $('#dPrices').innerHTML = fuels.map((k) =>
-    `<div class="stat"><div class="k">${esc(state.data.fuels[k])}</div><div class="v">${fmtPrice(s.p[k])} €</div></div>`).join('');
+    `<div class="stat" data-k="${esc(k)}"><div class="k">${esc(state.data.fuels[k])}</div><div class="v">${fmtPrice(s.p[k])} €</div></div>`).join('');
   detail.fuel = fuels.includes(state.fuel) ? state.fuel : fuels[0];
   renderChips($('#dFuelChips'), fuels.map((k) => [k, state.data.fuels[k]]), detail.fuel, (k) => { detail.fuel = k; drawChart(); });
   $('#chart').innerHTML = '<div class="empty-chart">Cargando histórico…</div>';
