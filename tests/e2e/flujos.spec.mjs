@@ -14,11 +14,11 @@ test.describe('carga de datos y barra de origen', () => {
     await expect(src).toContainText('En directo del Ministerio');
     await expect(src).toContainText(/copia \d{2}:\d{2}/);
 
-    // Gasolina 95 por defecto; la de venta restringida (1004) no sale
-    await expect.poll(() => cardPrices(page)).toEqual(['1,269', '1,279', '1,549', '1,589', '1,629']);
-    await expect.poll(() => cardNames(page)).toEqual(['Petrem', 'Ballenoil', 'Galp', 'Repsol', 'Shell']);
-    await expect(page.locator('#summary')).toContainText('1,269 €');
-    await expect(page.locator('#summary')).toContainText('5');
+    // Gasolina 95 por defecto; la de venta restringida (1004) sale siempre, con su etiqueta
+    await expect.poll(() => cardPrices(page)).toEqual(['1,199', '1,269', '1,279', '1,549', '1,589', '1,629']);
+    await expect.poll(() => cardNames(page)).toEqual(['Cooperativa Agrícola', 'Petrem', 'Ballenoil', 'Galp', 'Repsol', 'Shell']);
+    await expect(page.locator('#summary')).toContainText('1,199 €');
+    await expect(page.locator('#summary')).toContainText('6');
     await expect(page.locator('.card').first()).toContainText('Más barata');
   });
 
@@ -27,12 +27,12 @@ test.describe('carga de datos y barra de origen', () => {
     await page.goto('/');
     const src = page.locator('#source');
     // Copia (1 céntimo más cara) mientras se consulta
-    await expect(page.locator('.card .price .v').first()).toHaveText('1,279');
+    await expect(page.locator('.card .price .v').first()).toHaveText('1,209');
     await expect(src).toContainText('Consultando al Ministerio');
     await expect(src).toContainText('Copia de GitHub');
     // Llega el directo
     await expect(src).toHaveAttribute('data-kind', 'live', { timeout: 10_000 });
-    await expect(page.locator('.card .price .v').first()).toHaveText('1,269');
+    await expect(page.locator('.card .price .v').first()).toHaveText('1,199');
   });
 
   test('si el Ministerio no responde, se queda la copia horaria y lo indica; tocar reintenta', async ({ page }) => {
@@ -49,13 +49,13 @@ test.describe('carga de datos y barra de origen', () => {
     await expect(src).toHaveAttribute('data-kind', 'error');
     await expect(src).toContainText('Copia de GitHub');
     await expect(src).toContainText('El Ministerio no responde');
-    await expect(page.locator('.card')).toHaveCount(5);
-    await expect(page.locator('.card .price .v').first()).toHaveText('1,279');
+    await expect(page.locator('.card')).toHaveCount(6);
+    await expect(page.locator('.card .price .v').first()).toHaveText('1,209');
 
     liveOk = true;
     await src.click();
     await expect(src).toHaveAttribute('data-kind', 'live');
-    await expect(page.locator('.card .price .v').first()).toHaveText('1,269');
+    await expect(page.locator('.card .price .v').first()).toHaveText('1,199');
   });
 
   test('sin copia horaria, funciona solo con el directo', async ({ page }) => {
@@ -63,7 +63,7 @@ test.describe('carga de datos y barra de origen', () => {
     await page.goto('/');
     await waitLiveSettled(page);
     await expect(page.locator('#source')).toHaveAttribute('data-kind', 'live');
-    await expect(page.locator('.card')).toHaveCount(5);
+    await expect(page.locator('.card')).toHaveCount(6);
   });
 
   test('si fallan las dos fuentes, avisa al usuario', async ({ page }) => {
@@ -91,22 +91,19 @@ test.describe('filtros', () => {
 
   test('cambiar de combustible reordena la lista', async ({ page }) => {
     await page.getByRole('radio', { name: 'Diésel', exact: true }).click();
-    await expect.poll(() => cardPrices(page)).toEqual(['1,589', '1,599', '1,659', '1,689', '1,729']);
+    await expect.poll(() => cardPrices(page)).toEqual(['1,450', '1,589', '1,599', '1,659', '1,689', '1,729']);
     await page.getByRole('radio', { name: 'GLP / Autogás' }).click();
     await expect.poll(() => cardNames(page)).toEqual(['Petrem']);
   });
 
-  test('combustible que solo vende una gasolinera restringida: lista vacía con aviso', async ({ page }) => {
+  test('combustible que solo vende una gasolinera restringida: sale con su etiqueta', async ({ page }) => {
     await page.getByRole('radio', { name: /Gasóleo B/ }).click();
-    await expect(page.locator('.card')).toHaveCount(0);
-    await expect(page.locator('#status')).toContainText('No hay gasolineras');
-    await page.getByLabel('Incluir venta restringida').check();
     await expect(page.locator('.card')).toHaveCount(1);
     await expect(page.locator('.card')).toContainText('Restringida');
   });
 
-  test('incluir venta restringida añade la cooperativa', async ({ page }) => {
-    await page.getByLabel('Incluir venta restringida').check();
+  test('la venta restringida se incluye siempre y su casilla no se ve', async ({ page }) => {
+    await expect(page.getByLabel('Incluir venta restringida')).toBeHidden();
     await expect(page.locator('.card')).toHaveCount(6);
     await expect(page.locator('.card').first()).toContainText('Cooperativa Agrícola');
     await expect(page.locator('.card').first()).toContainText('1,199');
@@ -114,11 +111,11 @@ test.describe('filtros', () => {
 
   test('filtrar por municipio', async ({ page }) => {
     await page.getByLabel('Municipio').selectOption('Figueres');
-    await expect.poll(() => cardNames(page)).toEqual(['Shell']);
+    await expect.poll(() => cardNames(page)).toEqual(['Cooperativa Agrícola', 'Shell']);
     await page.getByLabel('Municipio').selectOption('Girona');
     await expect.poll(() => cardNames(page)).toEqual(['Ballenoil', 'Repsol']);
     await page.getByLabel('Municipio').selectOption('');
-    await expect(page.locator('.card')).toHaveCount(5);
+    await expect(page.locator('.card')).toHaveCount(6);
   });
 
   test('buscar por marca o dirección, sin importar acentos ni mayúsculas', async ({ page }) => {
@@ -130,7 +127,7 @@ test.describe('filtros', () => {
     await q.fill('zzzz');
     await expect(page.locator('.card')).toHaveCount(0);
     await q.fill('');
-    await expect(page.locator('.card')).toHaveCount(5);
+    await expect(page.locator('.card')).toHaveCount(6);
   });
 
   test('las preferencias (combustible y municipio) se recuerdan al volver', async ({ page }) => {
@@ -164,7 +161,7 @@ test.describe('cerca de mí', () => {
     await expect.poll(() => cardNames(page)).toEqual(['Repsol', 'Ballenoil', 'Petrem']);
 
     await page.getByLabel('Radio').selectOption('50');
-    await expect(page.locator('.card')).toHaveCount(5);
+    await expect(page.locator('.card')).toHaveCount(6);
 
     // Desactivar vuelve al filtro por municipio
     await page.getByRole('button', { name: 'Cerca de mí' }).click();
@@ -183,7 +180,7 @@ test.describe('cerca de mí', () => {
     await page.getByRole('button', { name: 'Cerca de mí' }).click();
     await expect(page.locator('#status')).toContainText('Permiso de ubicación denegado');
     await expect(page.getByRole('button', { name: 'Cerca de mí' })).toHaveAttribute('aria-pressed', 'false');
-    await expect(page.locator('.card')).toHaveCount(5);
+    await expect(page.locator('.card')).toHaveCount(6);
   });
 });
 

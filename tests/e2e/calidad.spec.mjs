@@ -76,7 +76,6 @@ test.describe('diseño adaptable', () => {
     await page.goto('/');
     await waitLiveSettled(page);
     // Más contenido para que haya scroll incluso en pantallas grandes
-    await page.getByLabel('Incluir venta restringida').check();
     await page.evaluate(() => { document.querySelector('main').style.paddingBottom = '2000px'; window.scrollTo(0, 1500); });
     await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(100);
     const top = await page.locator('header.top').boundingBox();
@@ -202,7 +201,7 @@ test.describe('sin conexión', () => {
     await page.route(/sedeaplicaciones\.minetur\.gob\.es/, (route) => route.abort('internetdisconnected'));
     await page.reload();
     await waitLiveSettled(page);
-    await expect(page.locator('h1')).toHaveText('Gasolina Girona');
+    await expect(page.locator('h1')).toHaveText('Combustibles de Girona');
     expect(await page.locator('.card').count()).toBeGreaterThan(0);
     await expect(page.locator('#source')).toHaveAttribute('data-kind', 'error');
     await expect(page.locator('#source')).toContainText('El Ministerio no responde');

@@ -66,6 +66,13 @@ test('carreteras y numerales romanos en mayúsculas', () => {
   assert.equal(one({ 'Dirección': 'CL ALFONSO XII, 161' }).d, 'Cl Alfonso XII, 161');
 });
 
+test('artículos y preposiciones en minúscula, salvo al principio', () => {
+  assert.equal(one({ Localidad: 'SARRIA DE TER' }).l, 'Sarria de Ter');
+  assert.equal(one({ 'Dirección': 'CAMI DEL MAS, S/N' }).d, 'Cami del Mas, S/N');
+  assert.equal(one({ Localidad: 'LA BISBAL D\'EMPORDA' }).l, "La Bisbal d'Emporda");
+  assert.equal(one({ 'Rótulo': 'ESTACION DE SERVICIO EL PONT I LA PLANA' }).n, 'Estacion de Servicio el Pont i la Plana');
+});
+
 test('palabras normales que empiezan por letras romanas no se tocan', () => {
   assert.equal(one({ Localidad: 'VIC' }).l, 'Vic');
   assert.equal(one({ Localidad: 'VILAMALLA' }).l, 'Vilamalla');

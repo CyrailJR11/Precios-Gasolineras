@@ -90,5 +90,5 @@ export async function cardPrices(page) {
 }
 
 export async function cardNames(page) {
-  return (await page.locator('.card .name').allTextContents()).map((t) => t.replace(/\s+(Más barata|Restringida)/g, '').trim());
+  return (await page.locator('.card .name').allTextContents()).map((t) => t.replace(/\s*(Más barata|Restringida)/g, '').trim());
 }
