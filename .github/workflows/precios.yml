@@ -19,6 +19,8 @@ jobs:
   collect:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    env:
+      HEALTHCHECK_URL: ${{ secrets.HEALTHCHECK_URL }}
     steps:
       - uses: actions/checkout@v5
 
@@ -41,3 +43,10 @@ jobs:
             git pull --rebase
             git push
           fi
+
+      # Opcional: "dead man's switch" en healthchecks.io (gratis). Si deja de recibir este aviso,
+      # healthchecks.io manda un correo aunque GitHub o el Worker de Cloudflare estén parados.
+      # Se activa añadiendo el secreto HEALTHCHECK_URL (Settings → Secrets and variables → Actions).
+      - name: Avisar a healthchecks.io
+        if: ${{ env.HEALTHCHECK_URL != '' }}
+        run: curl -fsS -m 10 --retry 3 -o /dev/null "$HEALTHCHECK_URL"
