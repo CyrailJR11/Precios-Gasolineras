@@ -427,10 +427,13 @@ function drawChart() {
   }
   const firstTs = full.length ? full[0][0] : nowTs;
   const t1 = nowTs;
-  const t0 = detail.days ? Math.max(firstTs, t1 - detail.days * 86400) : firstTs;
+  // El eje abarca siempre el periodo elegido, aunque los datos empiecen más tarde
+  const t0 = detail.days ? t1 - detail.days * 86400 : firstTs;
 
-  // Tabla (cambios de precio, más reciente primero)
-  table.innerHTML = '<tr><th>Fecha</th><th>Precio</th></tr>' + full.slice().reverse().map(([ts, v]) =>
+  // Tabla (cambios de precio del periodo elegido, más reciente primero; incluye el precio con el que empieza)
+  let from = 0;
+  while (from + 1 < full.length && full[from + 1][0] <= t0) from++;
+  table.innerHTML = '<tr><th>Fecha</th><th>Precio</th></tr>' + full.slice(from).reverse().map(([ts, v]) =>
     `<tr><td>${fmtDate(new Date(ts * 1000), { dateStyle: 'short', timeStyle: 'short' })}</td><td>${v == null ? 'No disponible' : fmtPrice(v) + ' €'}</td></tr>`).join('');
 
   const st = clip(full, t0, t1);

@@ -209,7 +209,7 @@ test.describe('ficha de gasolinera', () => {
     await expect(chart.locator('svg path.line.ref')).toHaveCount(1);
     await expect(chart.locator('.legend')).toContainText('Media provincia');
 
-    for (const label of ['7 días', '90 días', 'Todo', '30 días']) {
+    for (const label of ['7 días', '90 días', '1 año', '30 días']) {
       await page.locator('#dRange').getByRole('radio', { name: label }).click();
       await expect(page.locator('#dRange').getByRole('radio', { name: label })).toHaveAttribute('aria-checked', 'true');
       await expect(chart.locator('svg path.line:not(.ref)')).toHaveAttribute('d', /^M/);
@@ -231,6 +231,28 @@ test.describe('ficha de gasolinera', () => {
     const rows = page.locator('#dTable tr');
     expect(await rows.count()).toBeGreaterThan(5);
     await expect(rows.nth(1)).toContainText('1,589 €');
+  });
+
+  test('la tabla sigue el periodo elegido, sin avisos de falta de datos', async ({ page }) => {
+    // El histórico de prueba empieza hace 30 días
+    await page.getByText('Ver cambios de precio en tabla').click();
+    const rows = page.locator('#dTable tr');
+    const range = page.locator('#dRange');
+    await range.getByRole('radio', { name: '7 días' }).click();
+    await expect(rows).toHaveCount(5); // cabecera + precio al empezar + 3 cambios
+    await range.getByRole('radio', { name: '1 año' }).click();
+    await expect(rows).toHaveCount(12);
+    await expect(page.locator('#chart')).not.toContainText('Solo hay datos');
+  });
+
+  test('el eje de fechas abarca el periodo elegido aunque haya menos datos', async ({ page }) => {
+    const firstLabel = () => page.locator('#chart svg text.axis-label[text-anchor="start"]').textContent();
+    const fmt = (daysAgo) => new Date(Date.now() - daysAgo * 86400_000)
+      .toLocaleString('es-ES', { timeZone: 'Europe/Madrid', day: 'numeric', month: 'short' });
+    for (const [label, days] of [['7 días', 7], ['90 días', 90], ['1 año', 365]]) {
+      await page.locator('#dRange').getByRole('radio', { name: label }).click();
+      await expect.poll(firstLabel).toBe(fmt(days));
+    }
   });
 
   test('se cierra con el botón, con Escape y tocando fuera', async ({ page }) => {
