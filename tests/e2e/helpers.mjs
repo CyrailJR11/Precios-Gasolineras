@@ -103,3 +103,9 @@ export async function cardPrices(page) {
 export async function cardNames(page) {
   return (await page.locator('.card .name').allTextContents()).map((t) => t.replace(/\s*(Más barata|Restringida)/g, '').trim());
 }
+
+/** Despliega Provincia/Comarca/Municipio si están recogidos tras el botón de zona. */
+export async function abrirZona(page) {
+  const btn = page.locator('#zonaBtn');
+  if ((await btn.getAttribute('aria-expanded')) !== 'true') await btn.click();
+}

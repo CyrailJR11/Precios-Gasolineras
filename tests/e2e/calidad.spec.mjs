@@ -1,7 +1,7 @@
 // Accesibilidad, diseño adaptable, temas, seguridad, PWA y funcionamiento sin conexión
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
-import { mockData, waitLiveSettled, RAW, snapshot } from './helpers.mjs';
+import { mockData, waitLiveSettled, RAW, RAW_CAT, snapshot } from './helpers.mjs';
 
 const axe = (page) => new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']);
 const serious = (r) => r.violations.filter((v) => ['serious', 'critical'].includes(v.impact));
@@ -45,7 +45,7 @@ test.describe('accesibilidad (axe, WCAG 2.1 AA)', () => {
     await mockData(page);
     await page.goto('/');
     await waitLiveSettled(page);
-    for (const sel of ['#nearBtn', '#prov', '#comarca', '#muni', '#q', '#source', '.card']) {
+    for (const sel of ['#nearBtn', '#zonaBtn', '#q', '#source', '.card']) {
       const box = await page.locator(sel).first().boundingBox();
       expect(box.height, sel).toBeGreaterThanOrEqual(40);
     }
@@ -57,6 +57,17 @@ test.describe('accesibilidad (axe, WCAG 2.1 AA)', () => {
 });
 
 test.describe('diseño adaptable', () => {
+  test('a 320px la fila de zona, buscador y «Cerca de mí» cabe con un sitio largo elegido', async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem('gg.zona', JSON.stringify({ pr: '17', co: 'Gironès', mu: 'Girona' })));
+    await page.setViewportSize({ width: 320, height: 800 });
+    await mockData(page, { snap: snapshot({ raw: RAW_CAT }), liveBody: RAW_CAT });
+    await page.goto('/');
+    await waitLiveSettled(page);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(0);
+    const near = await page.locator('#nearBtn').boundingBox();
+    expect(near.x + near.width).toBeLessThanOrEqual(320 - 16 + 0.5);
+  });
+
   for (const width of [320, 375, 414, 768, 1280]) {
     test(`sin scroll horizontal a ${width}px`, async ({ page }) => {
       await page.setViewportSize({ width, height: 800 });

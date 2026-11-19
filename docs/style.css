@@ -74,7 +74,7 @@ a { color: var(--accent-ink); }
   background: var(--surface-1);
   border-bottom: 1px solid var(--border);
   padding: calc(10px + env(safe-area-inset-top)) 16px 10px;
-  display: grid; gap: 8px;
+  display: grid; gap: 6px;
 }
 .title-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
 /* «Combustibles de Cataluña» no cabe a 20px en pantallas de 320px (iPhone SE): baja hasta 18px */
@@ -119,9 +119,19 @@ h1 { font-size: clamp(18px, 5.6vw, 20px); margin: 0; letter-spacing: -.01em; whi
 .controls { display: flex; gap: 8px; align-items: end; flex-wrap: wrap; }
 .field { display: grid; gap: 2px; min-width: 0; }
 .grow { flex: 1 1 160px; }
-/* Zona: Provincia y Comarca arriba; Municipio y «Cerca de mí» debajo */
+/* Zona: un botón con el sitio elegido; al tocarlo se despliegan Provincia, Comarca y Municipio */
+.controls.fila { flex-wrap: nowrap; gap: 6px; }
+.zona-btn { flex: 1.3 1 0; min-width: 0; overflow: hidden; justify-content: flex-start; padding: 0 8px; gap: 4px; }
+.busca { flex: 1 1 0; grid-template-columns: minmax(0, 1fr); }
+.busca input { min-width: 0; }
+.btn.icon-only { flex: none; width: 44px; padding: 0; }
+.zona-btn .zona-txt { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
+.zona-btn .zona-sub { color: var(--text-secondary); font-size: 13px; }
+.zona-btn .chev { flex: none; transition: transform .15s; }
+.zona-btn[aria-expanded="true"] .chev { transform: rotate(180deg); }
 .zona { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 8px; align-items: end; }
-.zona .btn { width: 100%; padding: 0 8px; }
+.zona[hidden] { display: none; }
+.zona .field:last-child { grid-column: 1 / -1; }
 .zona select { text-overflow: ellipsis; padding-left: 8px; padding-right: 4px; }
 select, input[type="search"] {
   width: 100%; font: inherit; font-size: 16px; color: var(--text-primary);
