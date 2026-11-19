@@ -429,8 +429,10 @@ function drawChart() {
   const t1 = nowTs;
   const t0 = detail.days ? Math.max(firstTs, t1 - detail.days * 86400) : firstTs;
 
-  // Tabla (cambios de precio, más reciente primero)
-  table.innerHTML = '<tr><th>Fecha</th><th>Precio</th></tr>' + full.slice().reverse().map(([ts, v]) =>
+  // Tabla (cambios de precio del periodo elegido, más reciente primero; incluye el precio con el que empieza)
+  let from = 0;
+  while (from + 1 < full.length && full[from + 1][0] <= t0) from++;
+  table.innerHTML = '<tr><th>Fecha</th><th>Precio</th></tr>' + full.slice(from).reverse().map(([ts, v]) =>
     `<tr><td>${fmtDate(new Date(ts * 1000), { dateStyle: 'short', timeStyle: 'short' })}</td><td>${v == null ? 'No disponible' : fmtPrice(v) + ' €'}</td></tr>`).join('');
 
   const st = clip(full, t0, t1);
@@ -491,7 +493,8 @@ function drawChart() {
       <rect x="${m.l}" y="0" width="${iw}" height="${H}" fill="transparent"/>
     </svg>
     <div class="tip" hidden></div>
-    ${full.length <= 1 ? `<p class="small muted">El histórico se acumula desde el ${since}; el gráfico irá mostrando los cambios de precio.</p>` : ''}`;
+    ${full.length <= 1 ? `<p class="small muted">El histórico se acumula desde el ${since}; el gráfico irá mostrando los cambios de precio.</p>`
+      : detail.days && firstTs > t1 - (detail.days - 1) * 86400 ? `<p class="small muted short-range">Solo hay datos desde el ${since}.</p>` : ''}`;
 
   const svg = box.querySelector('svg');
   const cross = svg.querySelector('.cross');
