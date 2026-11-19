@@ -15,7 +15,7 @@
   <link rel="apple-touch-icon" href="icon-192.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Gasolina CAT">
-  <link rel="stylesheet" href="style.css?v=11">
+  <link rel="stylesheet" href="style.css?v=12">
 </head>
 <body>
   <header class="top">
@@ -27,11 +27,23 @@
 
     <div class="chips" id="fuelChips" role="radiogroup" aria-label="Combustible"></div>
 
-    <div class="controls">
-      <label class="field grow">
-        <span class="sr-only">Provincia o municipio</span>
-        <select id="muni" aria-label="Provincia o municipio">
+    <div class="zona" role="group" aria-label="Zona">
+      <label class="field">
+        <span class="small muted">Provincia</span>
+        <select id="prov" aria-label="Provincia">
           <option value="">Toda Cataluña</option>
+        </select>
+      </label>
+      <label class="field">
+        <span class="small muted">Comarca</span>
+        <select id="comarca" aria-label="Comarca">
+          <option value="">Todas</option>
+        </select>
+      </label>
+      <label class="field">
+        <span class="small muted">Municipio</span>
+        <select id="muni" aria-label="Municipio">
+          <option value="">Todos</option>
         </select>
       </label>
       <button id="nearBtn" class="btn" type="button" aria-pressed="false" title="Ordenar por distancia">
@@ -120,6 +132,6 @@
     </div>
   </dialog>
 
-  <script type="module" src="app.js?v=13"></script>
+  <script type="module" src="app.js?v=14"></script>
 </body>
 </html>

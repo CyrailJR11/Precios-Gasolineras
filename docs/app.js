@@ -1,27 +1,41 @@
 import { API_BASE, API_CCAA, CCAA, PROVINCIAS, FUEL_LABELS, transform, isValidResponse } from './transform.mjs';
+import { comarcaDe } from './comarcas.mjs';
 
 const $ =(s) => document.querySelector(s);
 const FUEL_ORDER = ['g95', 'gA', 'g98', 'gP', 'g95p', 'e10', 'glp', 'hvo', 'gB', 'gnc', 'adb'];
 const PAGE = 50;
+const ZONA_IDS = ['#prov', '#comarca', '#muni'];
 
 const store = {
   get(k, d) { try { const v = localStorage.getItem('gg.' + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
   set(k, v) { try { localStorage.setItem('gg.' + k, JSON.stringify(v)); } catch { /* sin almacenamiento */ } },
 };
 
-// Zona elegida: '' = toda Cataluña, '08' = una provincia, '08|Badalona' = un municipio de esa provincia
-function initialScope() {
-  const s = store.get('scope', null);
-  if (typeof s === 'string') return s;
-  // Antes la web era solo de Girona y guardaba el municipio en 'muni' ('' = toda la provincia)
-  const old = store.get('muni', null);
-  return typeof old === 'string' ? (old ? `17|${old}` : '17') : '';
+// Zona elegida: provincia ('08'), comarca y municipio; '' en cada nivel = todos
+function initialZona() {
+  const z = store.get('zona', null);
+  const ok = (v) => typeof v === 'string';
+  if (z && ok(z.pr) && ok(z.co) && ok(z.mu)) return { pr: z.pr, co: z.co, mu: z.mu };
+  // Versiones anteriores: 'scope' ('' / '08' / '08|Badalona') y, antes aún (solo Girona), 'muni'
+  let s = store.get('scope', null);
+  if (!ok(s)) { const old = store.get('muni', null); s = ok(old) ? (old ? `17|${old}` : '17') : ''; }
+  const mu = s.slice(3);
+  return { pr: s.slice(0, 2), co: mu ? comarcaDe(mu) || SIN_COMARCA : '', mu };
+}
+
+// Comarca de cada municipio (se calcula una vez por nombre)
+const SIN_COMARCA = 'Otros municipios';
+const comarcas = new Map();
+function comarcaOf(m) {
+  let c = comarcas.get(m);
+  if (c === undefined) { c = comarcaDe(m) || SIN_COMARCA; comarcas.set(m, c); }
+  return c;
 }
 
 const state = {
   data: null,
   fuel: store.get('fuel', 'g95'),
-  scope: initialScope(),
+  zona: initialZona(),
   near: false,
   pos: null,
   radius: store.get('radius', 10),
@@ -61,8 +75,7 @@ const ALL_PROVS = Object.keys(PROVINCIAS);
 const src = { snap: null, live: {} };
 const inFlight = new Map();
 
-const scopeProv = () => state.scope.slice(0, 2);
-const scopeMuni = () => state.scope.slice(3);
+const scopeProv = () => state.zona.pr;
 
 async function fetchSnapshot() {
   const res = await fetch('data/latest.json', { cache: 'no-cache' });
@@ -167,7 +180,6 @@ function renderSource() {
 }
 
 // Junta la copia guardada con lo que haya en directo (el directo manda en su provincia) y repinta
-let zonesSig = '';
 function update() {
   if (!src.snap && !Object.keys(src.live).length) { renderSource(); return; }
   const liveProvs = new Set(Object.keys(src.live));
@@ -186,28 +198,7 @@ function update() {
     state.fuel = k; store.set('fuel', k); state.shown = PAGE; render();
   });
 
-  // Zonas: toda Cataluña, cada provincia y sus municipios. Solo se rehace la lista si ha cambiado.
-  const byProv = {};
-  for (const s of d.estaciones) (byProv[s.pr] ||= new Set()).add(s.m);
-  const provs = Object.keys(byProv).filter((p) => p in PROVINCIAS)
-    .sort((a, b) => PROVINCIAS[a].localeCompare(PROVINCIAS[b], 'es'));
-  const zones = provs.map((p) => [p, [...byProv[p]].sort((a, b) => a.localeCompare(b, 'es'))]);
-  const sig = JSON.stringify(zones);
-  const sel = $('#muni');
-  if (sig !== zonesSig) {
-    zonesSig = sig;
-    const opts = [new Option('Toda Cataluña', '')];
-    for (const [p, munis] of zones) {
-      const g = document.createElement('optgroup');
-      g.label = PROVINCIAS[p];
-      g.append(new Option(`Toda la provincia de ${PROVINCIAS[p]}`, p), ...munis.map((m) => new Option(m, `${p}|${m}`)));
-      opts.push(g);
-    }
-    sel.replaceChildren(...opts);
-  }
-  const valid = state.scope === '' || zones.some(([p, munis]) => state.scope === p || munis.some((m) => state.scope === `${p}|${m}`));
-  if (!valid) state.scope = '';
-  sel.value = state.scope;
+  renderZona();
 
   renderSource();
   render();
@@ -246,17 +237,69 @@ function renderChips(container, items, current, onPick) {
   }
 }
 
+// ---------- Zona: Provincia → Comarca → Municipio ----------
+const optSigs = new WeakMap();
+function fillSelect(sel, opts, value) {
+  const sig = JSON.stringify(opts);
+  if (optSigs.get(sel) !== sig) {
+    optSigs.set(sel, sig);
+    sel.replaceChildren(...opts.map(([v, t]) => new Option(t, v)));
+  }
+  sel.value = value;
+}
+
+const byName = (a, b) => a.localeCompare(b, 'es');
+
+// Cada desplegable solo ofrece lo que hay dentro del nivel anterior
+function renderZona() {
+  const z = state.zona, est = state.data.estaciones;
+  const provs = [...new Set(est.map((s) => s.pr))].filter((p) => p in PROVINCIAS)
+    .sort((a, b) => byName(PROVINCIAS[a], PROVINCIAS[b]));
+  if (z.pr && !provs.includes(z.pr)) z.pr = z.co = z.mu = '';
+  const inPr = z.pr ? est.filter((s) => s.pr === z.pr) : est;
+  const coms = [...new Set(inPr.map((s) => comarcaOf(s.m)))]
+    .sort((a, b) => (a === SIN_COMARCA) - (b === SIN_COMARCA) || byName(a, b));
+  if (z.co && !coms.includes(z.co)) z.co = z.mu = '';
+  const inCo = z.co ? inPr.filter((s) => comarcaOf(s.m) === z.co) : inPr;
+  const munis = [...new Set(inCo.map((s) => s.m))].sort(byName);
+  if (z.mu && !munis.includes(z.mu)) z.mu = '';
+  fillSelect($('#prov'), [['', 'Toda Cataluña'], ...provs.map((p) => [p, PROVINCIAS[p]])], z.pr);
+  fillSelect($('#comarca'), [['', 'Todas'], ...coms.map((c) => [c, c])], z.co);
+  fillSelect($('#muni'), [['', 'Todos'], ...munis.map((m) => [m, m])], z.mu);
+}
+
+function setZona(change) {
+  const z = state.zona;
+  Object.assign(z, change);
+  const est = state.data.estaciones;
+  if ('mu' in change && z.mu) {
+    // Al elegir un municipio se colocan también su provincia y su comarca
+    const s = est.find((x) => x.m === z.mu);
+    if (s) { z.pr = s.pr; z.co = comarcaOf(s.m); }
+  } else if ('co' in change && z.co && !z.pr) {
+    // Una comarca que está entera en una provincia fija también la provincia
+    const provs = new Set(est.filter((x) => comarcaOf(x.m) === z.co).map((x) => x.pr));
+    if (provs.size === 1) z.pr = [...provs][0];
+  }
+  store.set('zona', { ...z });
+  state.shown = PAGE;
+  renderZona();
+  render();
+  // Si la provincia nueva aún no tiene precios en directo, se piden
+  if (!source()?.live) refreshLive(); else renderSource();
+}
+
 // ---------- Lista ----------
 function filtered() {
   const { data, fuel, near, pos, radius, q, restricted } = state;
-  const pr = scopeProv(), muni = scopeMuni();
+  const { pr, co, mu } = state.zona;
   const nq = norm(q);
   let rows = data.estaciones.filter((s) => s.p[fuel] != null && (restricted || !s.r));
   if (near && pos) {
     rows = rows.map((s) => ({ ...s, dist: s.lat != null ? haversine(pos, s) : Infinity }));
     if (radius > 0) rows = rows.filter((s) => s.dist <= radius);
-  } else if (pr) {
-    rows = rows.filter((s) => s.pr === pr && (!muni || s.m === muni));
+  } else if (pr || co || mu) {
+    rows = rows.filter((s) => (!pr || s.pr === pr) && (!co || comarcaOf(s.m) === co) && (!mu || s.m === mu));
   }
   if (nq) rows = rows.filter((s) => norm(`${s.n} ${s.d} ${s.l} ${s.m}`).includes(nq));
   const byPrice = (a, b) => a.p[fuel] - b.p[fuel] || (a.dist ?? 0) - (b.dist ?? 0);
@@ -274,7 +317,8 @@ function render() {
 
   const scope = state.near && state.pos
     ? (state.radius > 0 ? `a menos de ${state.radius} km` : 'por distancia')
-    : (scopeMuni() || (scopeProv() ? `en la provincia de ${PROVINCIAS[scopeProv()]}` : 'en Cataluña'));
+    : (state.zona.mu || (state.zona.co && state.zona.co !== SIN_COMARCA ? `en la comarca ${state.zona.co}`
+      : scopeProv() ? `en la provincia de ${PROVINCIAS[scopeProv()]}` : 'en Cataluña'));
   $('#summary').innerHTML = prices.length ? `
     <div class="stat"><div class="k">Más barata</div><div class="v">${fmtPrice(min)} €</div></div>
     <div class="stat"><div class="k">Media</div><div class="v">${fmtPrice(avg)} €</div></div>
@@ -321,7 +365,7 @@ function toggleNear() {
   state.near = !state.near;
   $('#nearBtn').setAttribute('aria-pressed', String(state.near));
   $('#nearControls').hidden = !state.near;
-  $('#muni').disabled = state.near;
+  for (const id of ZONA_IDS) $(id).disabled = state.near;
   state.shown = PAGE;
   if (state.near && !state.pos) locate();
   render();
@@ -338,7 +382,7 @@ function locate() {
       state.near = false;
       $('#nearBtn').setAttribute('aria-pressed', 'false');
       $('#nearControls').hidden = true;
-      $('#muni').disabled = false;
+      for (const id of ZONA_IDS) $(id).disabled = false;
       render();
       $('#status').textContent = err.code === 1
         ? 'Permiso de ubicación denegado. Actívalo en los ajustes del navegador para usar «Cerca de mí».'
@@ -548,12 +592,9 @@ function drawChart() {
 }
 
 // ---------- Eventos ----------
-$('#muni').addEventListener('change', (e) => {
-  state.scope = e.target.value; store.set('scope', state.scope); state.shown = PAGE;
-  render();
-  // Si la zona nueva aún no tiene precios en directo, se piden
-  if (!source()?.live) refreshLive(); else renderSource();
-});
+$('#prov').addEventListener('change', (e) => setZona({ pr: e.target.value, co: '', mu: '' }));
+$('#comarca').addEventListener('change', (e) => setZona({ co: e.target.value, mu: '' }));
+$('#muni').addEventListener('change', (e) => setZona({ mu: e.target.value }));
 $('#nearBtn').addEventListener('click', toggleNear);
 $('#radius').value = String(state.radius);
 $('#radius').addEventListener('change', (e) => { state.radius = +e.target.value; store.set('radius', state.radius); render(); });

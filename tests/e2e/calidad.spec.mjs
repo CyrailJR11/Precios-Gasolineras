@@ -45,7 +45,7 @@ test.describe('accesibilidad (axe, WCAG 2.1 AA)', () => {
     await mockData(page);
     await page.goto('/');
     await waitLiveSettled(page);
-    for (const sel of ['#nearBtn', '#muni', '#q', '#source', '.card']) {
+    for (const sel of ['#nearBtn', '#prov', '#comarca', '#muni', '#q', '#source', '.card']) {
       const box = await page.locator(sel).first().boundingBox();
       expect(box.height, sel).toBeGreaterThanOrEqual(40);
     }
