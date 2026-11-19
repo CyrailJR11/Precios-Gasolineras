@@ -112,9 +112,13 @@ test.describe('filtros', () => {
   test('filtrar por municipio', async ({ page }) => {
     await page.getByLabel('Municipio').selectOption('Figueres');
     await expect.poll(() => cardNames(page)).toEqual(['Cooperativa Agrícola', 'Shell']);
+    // El municipio está dentro de su comarca: para ir a otra comarca se vuelve a «Todas»
+    await expect(page.getByLabel('Comarca', { exact: true })).toHaveValue('Alt Empordà');
+    await page.getByLabel('Comarca', { exact: true }).selectOption('');
     await page.getByLabel('Municipio').selectOption('Girona');
     await expect.poll(() => cardNames(page)).toEqual(['Ballenoil', 'Repsol']);
-    await page.getByLabel('Municipio').selectOption('');
+    await page.getByLabel('Provincia', { exact: true }).selectOption('');
+    await expect(page.getByLabel('Municipio')).toHaveValue('');
     await expect(page.locator('.card')).toHaveCount(6);
   });
 
@@ -136,7 +140,9 @@ test.describe('filtros', () => {
     await page.reload();
     await waitLiveSettled(page);
     await expect(page.getByRole('radio', { name: 'Diésel', exact: true })).toHaveAttribute('aria-checked', 'true');
-    await expect(page.getByLabel('Municipio')).toHaveValue('17|Girona');
+    await expect(page.getByLabel('Provincia', { exact: true })).toHaveValue('17');
+    await expect(page.getByLabel('Comarca', { exact: true })).toHaveValue('Gironès');
+    await expect(page.getByLabel('Municipio')).toHaveValue('Girona');
     await expect.poll(() => cardPrices(page)).toEqual(['1,599', '1,689']);
   });
 });
@@ -151,7 +157,7 @@ test.describe('cerca de mí', () => {
 
     await page.getByRole('button', { name: 'Cerca de mí' }).click();
     await expect(page.getByRole('button', { name: 'Cerca de mí' })).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.getByLabel('Municipio')).toBeDisabled();
+    for (const z of ['Provincia', 'Comarca', 'Municipio']) await expect(page.getByLabel(z, { exact: true })).toBeDisabled();
 
     // Radio 10 km por defecto: solo 3 gasolineras
     await expect.poll(() => cardNames(page)).toEqual(['Petrem', 'Ballenoil', 'Repsol']);
@@ -165,7 +171,7 @@ test.describe('cerca de mí', () => {
 
     // Desactivar vuelve al filtro por municipio
     await page.getByRole('button', { name: 'Cerca de mí' }).click();
-    await expect(page.getByLabel('Municipio')).toBeEnabled();
+    for (const z of ['Provincia', 'Comarca', 'Municipio']) await expect(page.getByLabel(z, { exact: true })).toBeEnabled();
     await expect(page.locator('#nearControls')).toBeHidden();
   });
 
@@ -299,14 +305,14 @@ test.describe('toda Cataluña', () => {
     await page.goto('/');
     await waitLiveSettled(page);
     await expect(page.locator('#source')).toHaveAttribute('data-kind', 'live');
-    await expect(page.getByLabel('Municipio')).toHaveValue('');
-    await expect(page.locator('#muni option:checked')).toHaveText('Toda Cataluña');
+    await expect(page.locator('#prov option:checked')).toHaveText('Toda Cataluña');
+    await expect(page.locator('#comarca option:checked')).toHaveText('Todas');
+    await expect(page.locator('#muni option:checked')).toHaveText('Todos');
     await expect(page.locator('.card')).toHaveCount(10);
     await expect(page.locator('.card').first()).toContainText('1,199');
     expect(urls.some((u) => /FiltroCCAA\/09$/.test(u))).toBe(true);
-    // Una provincia por grupo, ordenadas por nombre
-    await expect(page.locator('#muni optgroup')).toHaveCount(4);
-    expect(await page.locator('#muni optgroup').evaluateAll((g) => g.map((x) => x.label))).toEqual(['Barcelona', 'Girona', 'Lleida', 'Tarragona']);
+    // Las cuatro provincias, ordenadas por nombre
+    expect(await page.locator('#prov option').allTextContents()).toEqual(['Toda Cataluña', 'Barcelona', 'Girona', 'Lleida', 'Tarragona']);
   });
 
   test('elegir una provincia filtra y solo pide en directo esa provincia', async ({ page }) => {
@@ -322,13 +328,13 @@ test.describe('toda Cataluña', () => {
     expect(urls.some((u) => /FiltroCCAA/.test(u))).toBe(false);
 
     // Barcelona aún no está en directo: enseña la copia (1 céntimo más cara) y luego el directo
-    await page.getByLabel('Municipio').selectOption('08');
+    await page.getByLabel('Provincia', { exact: true }).selectOption('08');
     await expect.poll(() => cardPrices(page)).toEqual(['1,259', '1,659']);
     await waitLiveSettled(page);
     expect(urls.some((u) => /FiltroProvincia\/08$/.test(u))).toBe(true);
     await expect(page.locator('#summary')).toContainText('2');
 
-    await page.getByLabel('Municipio').selectOption('Toda la provincia de Tarragona');
+    await page.getByLabel('Provincia', { exact: true }).selectOption('Tarragona');
     await expect.poll(() => cardNames(page)).toEqual(['Galp']);
   });
 
@@ -337,8 +343,47 @@ test.describe('toda Cataluña', () => {
     await mockData(page, { snap: snapshot({ raw: RAW_CAT }), liveBody: RAW_CAT });
     await page.goto('/');
     await waitLiveSettled(page);
-    await expect(page.getByLabel('Municipio')).toHaveValue('17|Figueres');
+    await expect(page.getByLabel('Provincia', { exact: true })).toHaveValue('17');
+    await expect(page.getByLabel('Comarca', { exact: true })).toHaveValue('Alt Empordà');
+    await expect(page.getByLabel('Municipio')).toHaveValue('Figueres');
     await expect.poll(() => cardNames(page)).toEqual(['Cooperativa Agrícola', 'Shell']);
+  });
+
+  test('se elige Provincia → Comarca → Municipio y cada lista solo ofrece lo de la anterior', async ({ page }) => {
+    await mockData(page, { snap: snapshot({ raw: RAW_CAT }), liveBody: RAW_CAT });
+    await page.goto('/');
+    await waitLiveSettled(page);
+    const opts = (id) => page.locator(`${id} option`).allTextContents();
+    // Sin provincia se ofrecen las comarcas de toda Cataluña
+    expect(await opts('#comarca')).toEqual(['Todas', 'Alt Empordà', 'Barcelonès', 'Garrotxa', 'Gironès', 'Segrià', 'Tarragonès']);
+
+    await page.getByLabel('Provincia', { exact: true }).selectOption('Girona');
+    expect(await opts('#comarca')).toEqual(['Todas', 'Alt Empordà', 'Garrotxa', 'Gironès']);
+    expect(await opts('#muni')).toEqual(['Todos', 'Aiguaviva', 'Figueres', 'Girona', 'Olot', 'Sarrià de Ter']);
+
+    await page.getByLabel('Comarca', { exact: true }).selectOption('Gironès');
+    expect(await opts('#muni')).toEqual(['Todos', 'Aiguaviva', 'Girona', 'Sarrià de Ter']);
+    await expect(page.locator('.card')).toHaveCount(3); // la cuarta no vende Gasolina 95
+    await expect(page.locator('#summary')).toHaveAttribute('aria-label', /Gironès/);
+
+    await page.getByLabel('Municipio').selectOption('Girona');
+    await expect.poll(() => cardNames(page)).toEqual(['Ballenoil', 'Repsol']);
+
+    // Cambiar de provincia vacía la comarca y el municipio
+    await page.getByLabel('Provincia', { exact: true }).selectOption('Lleida');
+    await expect(page.getByLabel('Comarca', { exact: true })).toHaveValue('');
+    await expect(page.getByLabel('Municipio')).toHaveValue('');
+    await expect.poll(() => cardNames(page)).toEqual(['Petrocat']);
+
+    // Elegir directamente una comarca o un municipio coloca también lo de arriba
+    await page.getByLabel('Provincia', { exact: true }).selectOption('');
+    await page.getByLabel('Comarca', { exact: true }).selectOption('Tarragonès');
+    await expect(page.getByLabel('Provincia', { exact: true })).toHaveValue('43');
+    await page.getByLabel('Provincia', { exact: true }).selectOption('');
+    await page.getByLabel('Municipio').selectOption('Barcelona');
+    await expect(page.getByLabel('Provincia', { exact: true })).toHaveValue('08');
+    await expect(page.getByLabel('Comarca', { exact: true })).toHaveValue('Barcelonès');
+    await expect(page.locator('.card')).toHaveCount(2);
   });
 
   test('la ficha compara con la media de su provincia', async ({ page }) => {

@@ -119,6 +119,10 @@ h1 { font-size: clamp(18px, 5.6vw, 20px); margin: 0; letter-spacing: -.01em; whi
 .controls { display: flex; gap: 8px; align-items: end; flex-wrap: wrap; }
 .field { display: grid; gap: 2px; min-width: 0; }
 .grow { flex: 1 1 160px; }
+/* Zona: Provincia y Comarca arriba; Municipio y «Cerca de mí» debajo */
+.zona { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 8px; align-items: end; }
+.zona .btn { width: 100%; padding: 0 8px; }
+.zona select { text-overflow: ellipsis; padding-left: 8px; padding-right: 4px; }
 select, input[type="search"] {
   width: 100%; font: inherit; font-size: 16px; color: var(--text-primary);
   background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 9px 10px; min-height: 42px;
