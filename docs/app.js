@@ -470,14 +470,39 @@ function drawChart() {
     grid += `<line class="gridline" x1="${m.l}" x2="${W - m.r}" y1="${y(v)}" y2="${y(v)}"/>`;
     grid += `<text class="axis-label" x="${m.l - 6}" y="${y(v) + 4}" text-anchor="end">${v.toFixed(step < 0.01 ? 3 : 2).replace('.', ',')}</text>`;
   }
-  // Etiquetas de fecha (hasta 4)
-  const nTicks = Math.min(4, Math.max(2, Math.floor(iw / 80)));
-  const multiDay = span > 2 * 86400;
-  for (let i = 0; i < nTicks; i++) {
-    const t = t0 + (span * i) / (nTicks - 1);
-    const lbl = fmtDate(new Date(t * 1000), multiDay ? { day: 'numeric', month: 'short' } : { hour: '2-digit', minute: '2-digit' });
-    const anchor = i === 0 ? 'start' : i === nTicks - 1 ? 'end' : 'middle';
-    grid += `<text class="axis-label" x="${x(t)}" y="${H - 6}" text-anchor="${anchor}">${lbl}</text>`;
+  if (span > 120 * 86400) {
+    // Periodos largos: una raya y una etiqueta por cada mes
+    const parts = (t) => fmtDate(new Date(t * 1000), { year: 'numeric', month: 'numeric' }).split('/').map(Number);
+    let [mo, yr] = parts(t0);
+    const monthStart = (y0, m0) => Date.UTC(y0, m0 - 1, 1) / 1000 - 3600; // 1 de mes en hora de Madrid (aprox.)
+    const fullW = (30.4 * 86400 / span) * iw;
+    const short = fullW >= 19;
+    for (let a = monthStart(yr, mo); a < t1;) {
+      const nm = mo === 12 ? 1 : mo + 1, ny = mo === 12 ? yr + 1 : yr;
+      const b = monthStart(ny, nm);
+      const s0 = Math.max(a, t0), s1 = Math.min(b, t1);
+      if (a > t0) grid += `<line class="gridline" x1="${x(a)}" x2="${x(a)}" y1="${m.t}" y2="${H - m.b}"/>`;
+      // Cada mes se rotula en el centro de su tramo. El mes en curso, si va por la mitad o menos,
+      // se alinea al borde derecho para no pisar al anterior; un tramo muy corto no se rotula.
+      const w = x(s1) - x(s0), last = b >= t1;
+      if (w >= fullW * (last ? 0.4 : 0.5)) {
+        let lbl = fmtDate(new Date(((s0 + s1) / 2) * 1000), { month: 'short' }).replace('.', '').slice(0, 3);
+        if (!short) lbl = lbl.charAt(0).toUpperCase();
+        const atEnd = last && w < fullW * 0.75;
+        grid += `<text class="axis-label month" x="${atEnd ? W - 1 : (x(s0) + x(s1)) / 2}" y="${H - 6}" text-anchor="${atEnd ? 'end' : 'middle'}">${lbl}</text>`;
+      }
+      a = b; mo = nm; yr = ny;
+    }
+  } else {
+    // Etiquetas de fecha (hasta 4)
+    const nTicks = Math.min(4, Math.max(2, Math.floor(iw / 80)));
+    const multiDay = span > 2 * 86400;
+    for (let i = 0; i < nTicks; i++) {
+      const t = t0 + (span * i) / (nTicks - 1);
+      const lbl = fmtDate(new Date(t * 1000), multiDay ? { day: 'numeric', month: 'short' } : { hour: '2-digit', minute: '2-digit' });
+      const anchor = i === 0 ? 'start' : i === nTicks - 1 ? 'end' : 'middle';
+      grid += `<text class="axis-label" x="${x(t)}" y="${H - 6}" text-anchor="${anchor}">${lbl}</text>`;
+    }
   }
 
   const hasRef = ref.length > 0;

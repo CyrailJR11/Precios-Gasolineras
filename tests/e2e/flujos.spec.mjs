@@ -249,10 +249,19 @@ test.describe('ficha de gasolinera', () => {
     const firstLabel = () => page.locator('#chart svg text.axis-label[text-anchor="start"]').textContent();
     const fmt = (daysAgo) => new Date(Date.now() - daysAgo * 86400_000)
       .toLocaleString('es-ES', { timeZone: 'Europe/Madrid', day: 'numeric', month: 'short' });
-    for (const [label, days] of [['7 días', 7], ['90 días', 90], ['1 año', 365]]) {
+    for (const [label, days] of [['7 días', 7], ['90 días', 90]]) {
       await page.locator('#dRange').getByRole('radio', { name: label }).click();
       await expect.poll(firstLabel).toBe(fmt(days));
     }
+  });
+
+  test('con «1 año» el eje muestra todos los meses', async ({ page }) => {
+    await page.locator('#dRange').getByRole('radio', { name: '1 año' }).click();
+    const labels = page.locator('#chart svg text.axis-label.month');
+    await expect.poll(() => labels.count()).toBeGreaterThanOrEqual(12);
+    const mes = new Date(Date.now() - 180 * 86400_000)
+      .toLocaleString('es-ES', { timeZone: 'Europe/Madrid', month: 'short' }).replace('.', '').slice(0, 3);
+    await expect(labels.filter({ hasText: new RegExp(`^(${mes}|${mes[0].toUpperCase()})$`) })).toHaveCount(1);
   });
 
   test('se cierra con el botón, con Escape y tocando fuera', async ({ page }) => {
