@@ -1,6 +1,6 @@
 // Flujos de uso en el móvil
 import { test, expect } from '@playwright/test';
-import { mockData, waitLiveSettled, cardPrices, cardNames, GIRONA, RAW, snapshot } from './helpers.mjs';
+import { mockData, waitLiveSettled, cardPrices, cardNames, GIRONA, RAW, RAW_CAT, snapshot } from './helpers.mjs';
 
 test.describe('carga de datos y barra de origen', () => {
   test('muestra los precios en directo del Ministerio, ordenados por precio', async ({ page }) => {
@@ -136,7 +136,7 @@ test.describe('filtros', () => {
     await page.reload();
     await waitLiveSettled(page);
     await expect(page.getByRole('radio', { name: 'Diésel', exact: true })).toHaveAttribute('aria-checked', 'true');
-    await expect(page.getByLabel('Municipio')).toHaveValue('Girona');
+    await expect(page.getByLabel('Municipio')).toHaveValue('17|Girona');
     await expect.poll(() => cardPrices(page)).toEqual(['1,599', '1,689']);
   });
 });
@@ -258,4 +258,68 @@ test('gasolinera sin histórico guardado: avisa en vez de romper el gráfico', a
   await page.locator('.card', { hasText: 'Galp' }).click();
   // Sin histórico se dibuja solo el precio en directo y se explica
   await expect(page.locator('#chart')).toContainText(/histórico se acumula|Aún no hay histórico/);
+});
+
+test.describe('toda Cataluña', () => {
+  test('por defecto muestra las 4 provincias y pide al Ministerio toda la comunidad', async ({ page }) => {
+    const urls = [];
+    page.on('request', (r) => { if (/minetur/.test(r.url())) urls.push(r.url()); });
+    await mockData(page, { snap: snapshot({ raw: RAW_CAT }), liveBody: RAW_CAT });
+    await page.goto('/');
+    await waitLiveSettled(page);
+    await expect(page.locator('#source')).toHaveAttribute('data-kind', 'live');
+    await expect(page.getByLabel('Municipio')).toHaveValue('');
+    await expect(page.locator('#muni option:checked')).toHaveText('Toda Cataluña');
+    await expect(page.locator('.card')).toHaveCount(10);
+    await expect(page.locator('.card').first()).toContainText('1,199');
+    expect(urls.some((u) => /FiltroCCAA\/09$/.test(u))).toBe(true);
+    // Una provincia por grupo, ordenadas por nombre
+    await expect(page.locator('#muni optgroup')).toHaveCount(4);
+    expect(await page.locator('#muni optgroup').evaluateAll((g) => g.map((x) => x.label))).toEqual(['Barcelona', 'Girona', 'Lleida', 'Tarragona']);
+  });
+
+  test('elegir una provincia filtra y solo pide en directo esa provincia', async ({ page }) => {
+    const urls = [];
+    page.on('request', (r) => { if (/minetur/.test(r.url())) urls.push(r.url()); });
+    await page.addInitScript(() => localStorage.setItem('gg.scope', '"25"'));
+    await mockData(page, { snap: snapshot({ raw: RAW_CAT }), liveBody: RAW_CAT });
+    await page.goto('/');
+    await waitLiveSettled(page);
+    await expect(page.locator('#source')).toHaveAttribute('data-kind', 'live');
+    await expect.poll(() => cardNames(page)).toEqual(['Petrocat']);
+    expect(urls.filter((u) => /FiltroProvincia\/25$/.test(u)).length).toBeGreaterThan(0);
+    expect(urls.some((u) => /FiltroCCAA/.test(u))).toBe(false);
+
+    // Barcelona aún no está en directo: enseña la copia (1 céntimo más cara) y luego el directo
+    await page.getByLabel('Municipio').selectOption('08');
+    await expect.poll(() => cardPrices(page)).toEqual(['1,259', '1,659']);
+    await waitLiveSettled(page);
+    expect(urls.some((u) => /FiltroProvincia\/08$/.test(u))).toBe(true);
+    await expect(page.locator('#summary')).toContainText('2');
+
+    await page.getByLabel('Municipio').selectOption('Toda la provincia de Tarragona');
+    await expect.poll(() => cardNames(page)).toEqual(['Galp']);
+  });
+
+  test('quien tenía guardado un municipio de Girona lo sigue viendo', async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem('gg.muni', '"Figueres"'));
+    await mockData(page, { snap: snapshot({ raw: RAW_CAT }), liveBody: RAW_CAT });
+    await page.goto('/');
+    await waitLiveSettled(page);
+    await expect(page.getByLabel('Municipio')).toHaveValue('17|Figueres');
+    await expect.poll(() => cardNames(page)).toEqual(['Cooperativa Agrícola', 'Shell']);
+  });
+
+  test('la ficha compara con la media de su provincia', async ({ page }) => {
+    await mockData(page, { snap: snapshot({ raw: RAW_CAT }), liveBody: RAW_CAT });
+    await page.goto('/');
+    await waitLiveSettled(page);
+    // Girona tiene media en los datos de prueba; Barcelona no
+    await page.locator('.card', { hasText: 'Repsol' }).filter({ hasText: 'N-II' }).click();
+    await expect(page.locator('#chart svg path.line.ref')).toHaveCount(1);
+    await page.getByRole('button', { name: 'Cerrar' }).click();
+    await page.locator('.card', { hasText: 'Plenoil' }).click();
+    await expect(page.locator('#chart svg path.line:not(.ref)')).toHaveCount(1);
+    await expect(page.locator('#chart svg path.line.ref')).toHaveCount(0);
+  });
 });

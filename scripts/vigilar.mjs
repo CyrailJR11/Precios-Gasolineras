@@ -15,12 +15,12 @@ import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import { appendFile } from 'node:fs/promises';
 
-import { API_BASE, isValidResponse } from '../docs/transform.mjs';
+import { API_CCAA, CCAA, PROVINCIAS, isValidResponse } from '../docs/transform.mjs';
 
 export const SITE = 'https://cyrailjr11.github.io/Precios-Gasolineras/';
 export const REPO = 'CyrailJR11/Precios-Gasolineras';
 export const MAX_AGE_MIN = 120; // la tarea va cada 30 min: 2 h son 4 ejecuciones perdidas seguidas
-export const MIN_STATIONS = 100;
+export const MIN_STATIONS = 1000; // Cataluña tiene unas 1.600
 
 const TZ = 'Europe/Madrid';
 const horaGirona = (d) => d.toLocaleString('es-ES', { timeZone: TZ, dateStyle: 'short', timeStyle: 'short' });
@@ -45,7 +45,7 @@ async function get(fetchImpl, url, { tries = 3, delayMs = 3000, timeoutMs = 30_0
 
 export async function checkWeb({ fetchImpl, site, retry }) {
   const fallos = [];
-  for (const [path, expect] of [['', /<title>Gasolina Girona<\/title>/], ['app.js', /fetchLive/], ['transform.mjs', /export function transform/]]) {
+  for (const [path, expect] of [['', /<title>Gasolina Cataluña<\/title>/], ['app.js', /fetchLive/], ['transform.mjs', /export function transform/]]) {
     const res = await get(fetchImpl, site + path, retry);
     if (res.status !== 200) fallos.push(`${path || 'página principal'}: HTTP ${res.status}`);
     else if (!expect.test(await res.text())) fallos.push(`${path || 'página principal'}: contenido inesperado`);
@@ -60,6 +60,8 @@ export async function checkDatos({ fetchImpl, site, now, maxAgeMin, retry }) {
   try { d = await res.json(); } catch { return { ok: false, detail: 'data/latest.json no es JSON válido' }; }
   const n = Array.isArray(d?.estaciones) ? d.estaciones.length : 0;
   if (n < MIN_STATIONS) return { ok: false, detail: `data/latest.json solo tiene ${n} gasolineras` };
+  const faltan = Object.keys(PROVINCIAS).filter((p) => !d.estaciones.some((s) => s.pr === p));
+  if (faltan.length) return { ok: false, detail: `data/latest.json no trae gasolineras de ${faltan.map((p) => PROVINCIAS[p]).join(', ')}` };
   const at = new Date(d.actualizado);
   if (Number.isNaN(at.getTime())) return { ok: false, detail: `fecha "actualizado" no válida: ${d.actualizado}` };
   const ageMin = Math.round((now - at) / 60000);
@@ -121,7 +123,7 @@ export async function run({
   site = process.env.SITE_URL || SITE,
   repo = process.env.GITHUB_REPOSITORY || REPO,
   token = process.env.GITHUB_TOKEN,
-  apiUrl = API_BASE + '17',
+  apiUrl = API_CCAA + CCAA,
   now = new Date(),
   maxAgeMin = +(process.env.MAX_AGE_MIN || MAX_AGE_MIN),
   retry = {},

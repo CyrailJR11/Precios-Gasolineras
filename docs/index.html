@@ -6,20 +6,20 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://sedeaplicaciones.minetur.gob.es; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Gasolina Girona</title>
-  <meta name="description" content="Precios de carburantes de las gasolineras de Girona, actualizados cada 30 minutos con datos oficiales del Ministerio.">
+  <title>Gasolina Cataluña</title>
+  <meta name="description" content="Precios de carburantes de las gasolineras de Cataluña (Barcelona, Girona, Lleida y Tarragona), actualizados cada 30 minutos con datos oficiales del Ministerio.">
   <meta name="theme-color" content="#fcfcfb" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#1a1a19" media="(prefers-color-scheme: dark)">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icon-192.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-title" content="Gasolina GI">
+  <meta name="apple-mobile-web-app-title" content="Gasolina CAT">
   <link rel="stylesheet" href="style.css?v=9">
 </head>
 <body>
   <header class="top">
-    <h1>Combustibles de Girona</h1>
+    <h1>Combustibles de Cataluña</h1>
     <button id="source" class="source" type="button" aria-live="polite" title="Toca para consultar los precios en directo">
       <span class="src-dot" aria-hidden="true"></span><span class="src-text"><span class="src-main">Cargando…</span></span>
       <svg class="src-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v5h-5"/></svg>
@@ -29,9 +29,9 @@
 
     <div class="controls">
       <label class="field grow">
-        <span class="sr-only">Municipio</span>
-        <select id="muni" aria-label="Municipio">
-          <option value="">Toda la provincia</option>
+        <span class="sr-only">Provincia o municipio</span>
+        <select id="muni" aria-label="Provincia o municipio">
+          <option value="">Toda Cataluña</option>
         </select>
       </label>
       <button id="nearBtn" class="btn" type="button" aria-pressed="false" title="Ordenar por distancia">
@@ -120,6 +120,6 @@
     </div>
   </dialog>
 
-  <script type="module" src="app.js?v=8"></script>
+  <script type="module" src="app.js?v=9"></script>
 </body>
 </html>
