@@ -4,7 +4,7 @@ import { comarcaDe } from './comarcas.mjs';
 const $ =(s) => document.querySelector(s);
 const FUEL_ORDER = ['g95', 'gA', 'g98', 'gP', 'g95p', 'e10', 'glp', 'hvo', 'gB', 'gnc', 'adb'];
 const PAGE = 50;
-const ZONA_IDS = ['#prov', '#comarca', '#muni'];
+const ZONA_IDS = ['#zonaBtn', '#prov', '#comarca', '#muni'];
 
 const store = {
   get(k, d) { try { const v = localStorage.getItem('gg.' + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
@@ -266,6 +266,15 @@ function renderZona() {
   fillSelect($('#prov'), [['', 'Toda Cataluña'], ...provs.map((p) => [p, PROVINCIAS[p]])], z.pr);
   fillSelect($('#comarca'), [['', 'Todas'], ...coms.map((c) => [c, c])], z.co);
   fillSelect($('#muni'), [['', 'Todos'], ...munis.map((m) => [m, m])], z.mu);
+  // Resumen en el botón: lo más concreto delante y el resto en pequeño
+  const parts = [z.mu, z.co, z.pr && PROVINCIAS[z.pr]].filter(Boolean);
+  $('#zonaMain').textContent = parts[0] || 'Toda Cataluña';
+  $('#zonaSub').textContent = parts.slice(1).join(', ');
+}
+
+function toggleZona(open = $('#zonaPanel').hidden) {
+  $('#zonaPanel').hidden = !open;
+  $('#zonaBtn').setAttribute('aria-expanded', String(open));
 }
 
 function setZona(change) {
@@ -282,6 +291,8 @@ function setZona(change) {
     if (provs.size === 1) z.pr = [...provs][0];
   }
   store.set('zona', { ...z });
+  // Elegido un municipio ya no hace falta ver los desplegables
+  if (z.mu) toggleZona(false);
   state.shown = PAGE;
   renderZona();
   render();
@@ -366,6 +377,7 @@ function toggleNear() {
   $('#nearBtn').setAttribute('aria-pressed', String(state.near));
   $('#nearControls').hidden = !state.near;
   for (const id of ZONA_IDS) $(id).disabled = state.near;
+  if (state.near) toggleZona(false);
   state.shown = PAGE;
   if (state.near && !state.pos) locate();
   render();
@@ -592,6 +604,7 @@ function drawChart() {
 }
 
 // ---------- Eventos ----------
+$('#zonaBtn').addEventListener('click', () => toggleZona());
 $('#prov').addEventListener('change', (e) => setZona({ pr: e.target.value, co: '', mu: '' }));
 $('#comarca').addEventListener('change', (e) => setZona({ co: e.target.value, mu: '' }));
 $('#muni').addEventListener('change', (e) => setZona({ mu: e.target.value }));
