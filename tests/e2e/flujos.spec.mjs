@@ -394,7 +394,8 @@ test.describe('toda Cataluña', () => {
     await waitLiveSettled(page);
     await page.locator('#zonaBtn').click();
     await expect(page.locator('#zonaPanel')).toBeVisible();
-    await page.mouse.wheel(0, 300);
+    // WebKit móvil no admite la rueda del ratón: se desplaza la página directamente
+    await page.evaluate(() => window.scrollBy(0, 300));
     await expect(page.locator('#zonaPanel')).toBeHidden();
     await expect(page.locator('#zonaBtn')).toHaveAttribute('aria-expanded', 'false');
   });
