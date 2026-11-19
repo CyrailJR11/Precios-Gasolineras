@@ -387,6 +387,18 @@ test.describe('toda Cataluña', () => {
     await expect(page.locator('#zonaSub')).toHaveText('Gironès, Girona');
   });
 
+  test('los desplegables de zona se recogen al bajar por la lista', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 500 });
+    await mockData(page, { snap: snapshot({ raw: RAW_CAT }), liveBody: RAW_CAT });
+    await page.goto('/');
+    await waitLiveSettled(page);
+    await page.locator('#zonaBtn').click();
+    await expect(page.locator('#zonaPanel')).toBeVisible();
+    await page.mouse.wheel(0, 300);
+    await expect(page.locator('#zonaPanel')).toBeHidden();
+    await expect(page.locator('#zonaBtn')).toHaveAttribute('aria-expanded', 'false');
+  });
+
   test('se elige Provincia → Comarca → Municipio y cada lista solo ofrece lo de la anterior', async ({ page }) => {
     await mockData(page, { snap: snapshot({ raw: RAW_CAT }), liveBody: RAW_CAT });
     await page.goto('/');

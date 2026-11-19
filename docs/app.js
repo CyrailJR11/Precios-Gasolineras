@@ -272,10 +272,17 @@ function renderZona() {
   $('#zonaSub').textContent = parts.slice(1).join(', ');
 }
 
+let zonaScrollY = 0;
 function toggleZona(open = $('#zonaPanel').hidden) {
   $('#zonaPanel').hidden = !open;
   $('#zonaBtn').setAttribute('aria-expanded', String(open));
+  zonaScrollY = window.scrollY;
 }
+
+// Al bajar por la lista los desplegables se recogen solos y la cabecera vuelve a ser compacta
+window.addEventListener('scroll', () => {
+  if (!$('#zonaPanel').hidden && Math.abs(window.scrollY - zonaScrollY) > 40) toggleZona(false);
+}, { passive: true });
 
 function setZona(change) {
   const z = state.zona;
