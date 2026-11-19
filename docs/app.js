@@ -427,7 +427,8 @@ function drawChart() {
   }
   const firstTs = full.length ? full[0][0] : nowTs;
   const t1 = nowTs;
-  const t0 = detail.days ? Math.max(firstTs, t1 - detail.days * 86400) : firstTs;
+  // El eje abarca siempre el periodo elegido, aunque los datos empiecen más tarde
+  const t0 = detail.days ? t1 - detail.days * 86400 : firstTs;
 
   // Tabla (cambios de precio del periodo elegido, más reciente primero; incluye el precio con el que empieza)
   let from = 0;

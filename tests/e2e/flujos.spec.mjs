@@ -248,6 +248,16 @@ test.describe('ficha de gasolinera', () => {
     await expect(page.locator('#chart .short-range')).toHaveCount(0);
   });
 
+  test('el eje de fechas abarca el periodo elegido aunque haya menos datos', async ({ page }) => {
+    const firstLabel = () => page.locator('#chart svg text.axis-label[text-anchor="start"]').textContent();
+    const fmt = (daysAgo) => new Date(Date.now() - daysAgo * 86400_000)
+      .toLocaleString('es-ES', { timeZone: 'Europe/Madrid', day: 'numeric', month: 'short' });
+    for (const [label, days] of [['7 días', 7], ['90 días', 90], ['1 año', 365]]) {
+      await page.locator('#dRange').getByRole('radio', { name: label }).click();
+      await expect.poll(firstLabel).toBe(fmt(days));
+    }
+  });
+
   test('se cierra con el botón, con Escape y tocando fuera', async ({ page }) => {
     const dlg = page.locator('#detail');
     await page.getByRole('button', { name: 'Cerrar' }).click();
