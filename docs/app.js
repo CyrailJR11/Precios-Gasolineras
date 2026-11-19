@@ -571,7 +571,7 @@ function drawChart() {
   const hasRef = ref.length > 0;
   const lastV = st[st.length - 1][1];
   box.innerHTML = `
-    ${hasRef ? `<div class="legend"><span><i></i>Esta gasolinera</span><span><i class="ref"></i>Media provincia</span></div>` : ''}
+    <div class="chart-head">${hasRef ? `<div class="legend"><span><i></i>Esta gasolinera</span><span><i class="ref"></i>Media provincia</span></div>` : ''}</div>
     <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Evolución del precio de ${esc(state.data.fuels[k])}">
       ${grid}
       ${hasRef ? `<path class="line ref" d="${path(ref)}"/>` : ''}
@@ -597,12 +597,12 @@ function drawChart() {
     cross.setAttribute('x1', x(t)); cross.setAttribute('x2', x(t)); cross.setAttribute('visibility', 'visible');
     if (v != null) { hdot.setAttribute('cx', x(t)); hdot.setAttribute('cy', y(v)); hdot.setAttribute('visibility', 'visible'); }
     tip.hidden = false;
-    tip.innerHTML = `${fmtDate(new Date(t * 1000), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}<br>
-      <b>${v == null ? '—' : fmtPrice(v) + ' €'}</b>${a != null ? `<br><span class="muted">Media: ${fmtPrice(a)} €</span>` : ''}`;
+    // Globo en una sola línea, en la franja de encima del gráfico, para no tapar nunca las líneas
+    tip.innerHTML = `${fmtDate(new Date(t * 1000), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+      · <b>${v == null ? '—' : fmtPrice(v) + ' €'}</b>${a != null ? ` · <span class="muted">Media ${fmtPrice(a)} €</span>` : ''}`;
     const sx = (x(t) / W) * r.width;
     const tw = tip.offsetWidth;
-    tip.style.left = Math.min(r.width - tw, Math.max(0, sx - tw / 2)) + 'px';
-    tip.style.top = (hasRef ? 22 : 0) + 'px';
+    tip.style.left = Math.max(0, Math.min(r.width - tw, sx - tw / 2)) + 'px';
   };
   const leave = () => { cross.setAttribute('visibility', 'hidden'); hdot.setAttribute('visibility', 'hidden'); tip.hidden = true; };
   svg.addEventListener('pointermove', move);
