@@ -131,7 +131,7 @@ test.describe('filtros', () => {
   });
 
   test('buscar por marca o dirección, sin importar acentos ni mayúsculas', async ({ page }) => {
-    const q = page.getByPlaceholder('Buscar marca o dirección…');
+    const q = page.getByLabel('Buscar marca o dirección');
     await q.fill('REPSOL');
     await expect(page.locator('.card')).toHaveCount(1);
     await q.fill('dali');
