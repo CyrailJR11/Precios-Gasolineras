@@ -4,7 +4,16 @@ import { readFileSync } from 'node:fs';
 import { transform, FUEL_LABELS } from '../../docs/transform.mjs';
 
 export const RAW = JSON.parse(readFileSync(new URL('../fixtures/ministerio-girona.json', import.meta.url), 'utf8'));
-export const MINISTERIO = /sedeaplicaciones\.minetur\.gob\.es\/.*FiltroProvincia\/17/;
+// Con toda Cataluña: 4 gasolineras más (2 en Barcelona, 1 en Lleida y 1 en Tarragona)
+export const RAW_CAT = JSON.parse(readFileSync(new URL('../fixtures/ministerio-cataluna.json', import.meta.url), 'utf8'));
+// La web pide una provincia (FiltroProvincia/17) o toda Cataluña (FiltroCCAA/09)
+export const MINISTERIO = /sedeaplicaciones\.minetur\.gob\.es\/.*(FiltroProvincia\/\d{2}|FiltroCCAA\/09)$/;
+
+/** Lo que respondería el Ministerio a esa URL: la provincia pedida o todo. */
+export function forUrl(raw, url) {
+  const m = /FiltroProvincia\/(\d{2})$/.exec(url);
+  return m ? { ...raw, ListaEESSPrecio: raw.ListaEESSPrecio.filter((e) => e.IDProvincia === m[1]) } : raw;
+}
 
 // Centro de Girona: a menos de 10 km solo hay 1001, 1002 y 1003 (la más cercana es 1002)
 export const GIRONA = { latitude: 41.9794, longitude: 2.8214 };
@@ -12,14 +21,14 @@ export const GIRONA = { latitude: 41.9794, longitude: 2.8214 };
 const HOUR = 3600;
 
 /** Copia horaria: igual que el directo pero 1 céntimo más cara, para distinguir una de otra. */
-export function snapshot({ hoursAgo = 1, bump = 0.01 } = {}) {
-  const estaciones = transform(RAW).map((s) => ({
+export function snapshot({ hoursAgo = 1, bump = 0.01, raw = RAW } = {}) {
+  const estaciones = transform(raw).map((s) => ({
     ...s,
     p: Object.fromEntries(Object.entries(s.p).map(([k, v]) => [k, Math.round((v + bump) * 1000) / 1000])),
   }));
   return {
     fuente: 'test',
-    provincia: '17',
+    ccaa: '09',
     fechaMinisterio: '2026-11-17T21:00:00',
     actualizado: new Date(Date.now() - hoursAgo * HOUR * 1000).toISOString(),
     fuels: FUEL_LABELS,
@@ -29,7 +38,7 @@ export function snapshot({ hoursAgo = 1, bump = 0.01 } = {}) {
 
 /** Histórico de 30 días con un cambio de precio cada 3 días, terminando en el precio actual. */
 export function history(id) {
-  const st = transform(RAW).find((s) => s.id === id);
+  const st = transform(RAW_CAT).find((s) => s.id === id);
   const now = Math.floor(Date.now() / 1000);
   const h = {};
   for (const [k, v] of Object.entries(st?.p || {})) {
@@ -43,8 +52,10 @@ export function history(id) {
 export function averages() {
   const now = Math.floor(Date.now() / 1000);
   return {
-    g95: [[now - 30 * 86400, 1.52], [now - 10 * 86400, 1.5], [now - HOUR, 1.48]],
-    gA: [[now - 30 * 86400, 1.68], [now - HOUR, 1.65]],
+    17: {
+      g95: [[now - 30 * 86400, 1.52], [now - 10 * 86400, 1.5], [now - HOUR, 1.48]],
+      gA: [[now - 30 * 86400, 1.68], [now - HOUR, 1.65]],
+    },
   };
 }
 
@@ -72,7 +83,7 @@ export async function mockData(page, { live = 'ok', snap = 'ok', liveBody = RAW 
     if (typeof live === 'function') return live(route);
     if (live === 'fail') return route.abort('failed');
     if (live && live.delay) await new Promise((r) => setTimeout(r, live.delay));
-    return json(route, liveBody);
+    return json(route, forUrl(liveBody, route.request().url()));
   });
 }
 

@@ -1,18 +1,18 @@
-// Recolector horario de precios de carburantes de la provincia de Girona.
+// Recolector de precios de carburantes de Cataluña (Barcelona, Girona, Lleida y Tarragona).
 // Fuente oficial: Ministerio para la Transición Ecológica (Geoportal de Gasolineras).
 // Sin dependencias: requiere Node 18+ (fetch nativo).
 //
 // Genera:
 //   docs/data/latest.json      -> estado actual de todas las gasolineras
 //   docs/data/h/<IDEESS>.json  -> histórico por gasolinera (solo puntos de cambio)
-//   docs/data/avg.json         -> media provincial por combustible
+//   docs/data/avg.json         -> media de cada provincia por combustible: { "17": { "g95": [...] }, ... }
 
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { API_BASE, FUELS, FUEL_LABELS, transform, parseFechaMinisterio, isValidResponse } from '../docs/transform.mjs';
+import { API_CCAA, CCAA, FUELS, FUEL_LABELS, transform, parseFechaMinisterio, isValidResponse } from '../docs/transform.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 export const AVG_KEEP_DAYS = 400;
@@ -23,7 +23,7 @@ export async function fetchWithRetry(url, { tries = 4, fetchImpl = fetch, delayM
   for (let i = 0; i < tries; i++) {
     try {
       const res = await fetchImpl(url, {
-        headers: { Accept: 'application/json', 'User-Agent': 'precios-carburantes-girona/1.0' },
+        headers: { Accept: 'application/json', 'User-Agent': 'precios-carburantes-cataluna/1.0' },
         signal: AbortSignal.timeout(timeoutMs),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -91,10 +91,25 @@ export function updateAverages(avg, stations, ts) {
   return avg;
 }
 
+/**
+ * Medias por provincia: { "17": { g95: [...] }, "08": {...} }. Un avg.json antiguo (de cuando solo había
+ * Girona, { g95: [...] }) se convierte a { "17": { g95: [...] } } para no perder su histórico.
+ */
+export function updateProvinceAverages(all, stations, ts) {
+  const fuelKeys = new Set(Object.keys(FUELS));
+  if (Object.keys(all).some((k) => fuelKeys.has(k))) all = { '17': all };
+  const byProv = {};
+  for (const s of stations) if (s.pr) (byProv[s.pr] ||= []).push(s);
+  for (const [pr, list] of Object.entries(byProv)) all[pr] = updateAverages(all[pr] || {}, list, ts);
+  // Provincias que hoy no vienen en la respuesta: solo se recortan los puntos viejos
+  for (const pr of Object.keys(all)) if (!byProv[pr]) updateAverages(all[pr], [], ts);
+  return all;
+}
+
 /** Ejecuta una recogida completa. Todo es inyectable para poder probarlo. */
 export async function run({
-  provincia = process.env.PROVINCIA || '17',
-  apiUrl = API_BASE + provincia,
+  ccaa = CCAA,
+  apiUrl = API_CCAA + ccaa,
   dataDir = join(ROOT, 'docs', 'data'),
   now = new Date(),
   fetchImpl = fetch,
@@ -119,11 +134,11 @@ export async function run({
   }
 
   const avgPath = join(dataDir, 'avg.json');
-  await writeFile(avgPath, JSON.stringify(updateAverages(await readJson(avgPath, {}), stations, ts)));
+  await writeFile(avgPath, JSON.stringify(updateProvinceAverages(await readJson(avgPath, {}), stations, ts)));
 
   const latest = {
     fuente: 'Ministerio para la Transición Ecológica — Geoportal de Gasolineras',
-    provincia,
+    ccaa,
     fechaMinisterio: parseFechaMinisterio(raw.Fecha),
     actualizado: now.toISOString(),
     fuels: FUEL_LABELS,

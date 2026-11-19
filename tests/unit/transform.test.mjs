@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { transform, parseFechaMinisterio, isValidResponse, FUELS, FUEL_LABELS, API_BASE } from '../../docs/transform.mjs';
+import { transform, parseFechaMinisterio, isValidResponse, FUELS, FUEL_LABELS, API_BASE, API_CCAA, CCAA, PROVINCIAS } from '../../docs/transform.mjs';
 
 const fixture = JSON.parse(readFileSync(new URL('../fixtures/ministerio-girona.json', import.meta.url), 'utf8'));
 const byId = (id) => transform(fixture).find((s) => s.id === id);
@@ -102,4 +102,22 @@ test('isValidResponse', () => {
 test('cada combustible tiene etiqueta y la URL base apunta a FiltroProvincia', () => {
   assert.deepEqual(Object.keys(FUEL_LABELS), Object.keys(FUELS));
   assert.match(API_BASE, /^https:\/\/sedeaplicaciones\.minetur\.gob\.es\/.+\/FiltroProvincia\/$/);
+});
+
+test('Cataluña: URL de la comunidad, código 09 y sus cuatro provincias', () => {
+  assert.match(API_CCAA, /^https:\/\/sedeaplicaciones\.minetur\.gob\.es\/.+\/FiltroCCAA\/$/);
+  assert.equal(CCAA, '09');
+  assert.deepEqual(PROVINCIAS, { '08': 'Barcelona', '17': 'Girona', '25': 'Lleida', '43': 'Tarragona' });
+});
+
+test('cada gasolinera lleva el código de su provincia', () => {
+  const raw = { ListaEESSPrecio: [{ IDEESS: '1', 'Rótulo': 'X', IDProvincia: '25', 'Tipo Venta': 'P' }] };
+  assert.equal(transform(raw)[0].pr, '25');
+});
+
+test('coordenadas 0,0 (estación sin ubicar) se tratan como desconocidas', () => {
+  const raw = { ListaEESSPrecio: [{ IDEESS: '1', 'Rótulo': 'X', IDProvincia: '08', Latitud: '0,000000', 'Longitud (WGS84)': '0,000000' }] };
+  const [s] = transform(raw);
+  assert.equal(s.lat, null);
+  assert.equal(s.lon, null);
 });

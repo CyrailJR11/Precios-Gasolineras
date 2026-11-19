@@ -1,6 +1,6 @@
-# Gasolina Girona
+# Gasolina Cataluña
 
-Web para el móvil con los precios de los carburantes de las gasolineras de la provincia de Girona,
+Web para el móvil con los precios de los carburantes de las gasolineras de Cataluña (Barcelona, Girona, Lleida y Tarragona),
 actualizados cada 30 minutos.
 
 Datos: [Geoportal de Gasolineras](https://geoportalgasolineras.es), Ministerio para la Transición Ecológica.

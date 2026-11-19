@@ -1,8 +1,14 @@
 // Conversión de la respuesta de la API del Ministerio al formato compacto de la app.
 // Lo usan tanto el recolector horario (Node) como la web (navegador), para que ambos den lo mismo.
 
-export const API_BASE =
-  'https://sedeaplicaciones.minetur.gob.es/ServiciosRESTCarburantes/PreciosCarburantes/EstacionesTerrestres/FiltroProvincia/';
+const API_ROOT = 'https://sedeaplicaciones.minetur.gob.es/ServiciosRESTCarburantes/PreciosCarburantes/EstacionesTerrestres/';
+// Una provincia: API_BASE + '17'. Toda una comunidad autónoma: API_CCAA + '09'.
+export const API_BASE = API_ROOT + 'FiltroProvincia/';
+export const API_CCAA = API_ROOT + 'FiltroCCAA/';
+
+// Cataluña (código de comunidad autónoma del Ministerio) y sus provincias
+export const CCAA = '09';
+export const PROVINCIAS = { '08': 'Barcelona', '17': 'Girona', '25': 'Lleida', '43': 'Tarragona' };
 
 // Clave corta -> [nombre del campo en la API, etiqueta para la web]
 export const FUELS = {
@@ -49,6 +55,9 @@ export function parseFechaMinisterio(f) {
 
 export function transform(raw) {
   return raw.ListaEESSPrecio.map((e) => {
+    // Alguna estación llega con coordenadas 0,0 (sin ubicar): se tratan como desconocidas
+    let lat = num(e['Latitud']), lon = num(e['Longitud (WGS84)']);
+    if (!lat || !lon) lat = lon = null;
     const p = {};
     for (const [k, [field]] of Object.entries(FUELS)) {
       const v = num(e[field]);
@@ -61,11 +70,12 @@ export function transform(raw) {
       m: e['Municipio'],
       l: titleCase(e['Localidad']),
       cp: e['C.P.'],
-      lat: num(e['Latitud']),
-      lon: num(e['Longitud (WGS84)']),
+      lat,
+      lon,
       h: e['Horario'],
       // Tipo Venta: P = público, R = restringido (socios / flotas)
       r: e['Tipo Venta'] === 'R' ? 1 : 0,
+      pr: e['IDProvincia'],
       p,
     };
   });

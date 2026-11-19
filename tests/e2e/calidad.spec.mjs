@@ -164,7 +164,7 @@ test.describe('app instalable (PWA)', () => {
     const res = await request.get(href);
     expect(res.ok()).toBeTruthy();
     const m = await res.json();
-    expect(m.name).toBe('Gasolina Girona');
+    expect(m.name).toBe('Gasolina Cataluña');
     expect(m.display).toBe('standalone');
     expect(m.start_url).toBe('./');
     const sizes = m.icons.map((i) => i.sizes);
@@ -177,7 +177,7 @@ test.describe('app instalable (PWA)', () => {
     const apple = await page.locator('link[rel="apple-touch-icon"]').getAttribute('href');
     expect((await request.get(apple)).ok()).toBeTruthy();
     await expect(page.locator('meta[name="viewport"]')).toHaveAttribute('content', /width=device-width/);
-    await expect(page).toHaveTitle('Gasolina Girona');
+    await expect(page).toHaveTitle('Gasolina Cataluña');
   });
 });
 
@@ -201,7 +201,7 @@ test.describe('sin conexión', () => {
     await page.route(/sedeaplicaciones\.minetur\.gob\.es/, (route) => route.abort('internetdisconnected'));
     await page.reload();
     await waitLiveSettled(page);
-    await expect(page.locator('h1')).toHaveText('Combustibles de Girona');
+    await expect(page.locator('h1')).toHaveText('Combustibles de Cataluña');
     expect(await page.locator('.card').count()).toBeGreaterThan(0);
     await expect(page.locator('#source')).toHaveAttribute('data-kind', 'error');
     await expect(page.locator('#source')).toContainText('El Ministerio no responde');

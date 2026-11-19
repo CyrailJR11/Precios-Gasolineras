@@ -44,7 +44,8 @@ test('primera ejecución: crea latest.json, histórico por gasolinera y medias',
 
     const latest = await readJ(join(dir, 'latest.json'));
     assert.equal(latest.estaciones.length, 7);
-    assert.equal(latest.provincia, '17');
+    assert.equal(latest.ccaa, '09');
+    assert.ok(latest.estaciones.every((e) => e.pr === '17'));
     assert.equal(latest.actualizado, T0.toISOString());
     assert.equal(latest.fechaMinisterio, '2026-11-17T22:00:00');
     assert.equal(latest.fuels.gA, 'Diésel');
@@ -57,8 +58,8 @@ test('primera ejecución: crea latest.json, histórico por gasolinera y medias',
     // Media de Gasolina 95: públicas 1001,1002,1003,1005,1007 (la restringida 1004 no cuenta)
     const avg = await readJ(join(dir, 'avg.json'));
     const expected = Math.round(((1.279 + 1.589 + 1.269 + 1.629 + 1.549) / 5) * 1000) / 1000;
-    assert.deepEqual(avg.g95, [[T0.getTime() / 1000, expected]]);
-    assert.equal(avg.glp, undefined, 'GLP solo en 1 gasolinera: sin media');
+    assert.deepEqual(avg['17'].g95, [[T0.getTime() / 1000, expected]]);
+    assert.equal(avg['17'].glp, undefined, 'GLP solo en 1 gasolinera: sin media');
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -158,6 +159,47 @@ test('un histórico corrupto se rehace en vez de romper la ejecución', async ()
     await run(opts(dir, T0));
     assert.deepEqual((await readJ(join(dir, 'h', '1001.json'))).g95, [[T0.getTime() / 1000, 1.279]]);
   } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+const cataluna = JSON.parse(readFileSync(new URL('../fixtures/ministerio-cataluna.json', import.meta.url), 'utf8'));
+
+test('toda Cataluña: histórico de las 4 provincias y una media por provincia', async () => {
+  const dir = await tmp();
+  try {
+    body = cataluna;
+    const r = await run(opts(dir, T0));
+    assert.equal(r.stations, 11);
+    const latest = await readJ(join(dir, 'latest.json'));
+    assert.deepEqual([...new Set(latest.estaciones.map((e) => e.pr))].sort(), ['08', '17', '25', '43']);
+    assert.deepEqual((await readJ(join(dir, 'h', '2003.json'))).g95, [[T0.getTime() / 1000, 1.499]]);
+    const avg = await readJ(join(dir, 'avg.json'));
+    // Barcelona (2), Lleida y Tarragona (1) no llegan al mínimo de 3 gasolineras: sin media
+    for (const pr of ['08', '25', '43']) assert.deepEqual(avg[pr], {});
+    // La media de Girona no se mezcla con las demás provincias
+    const expected = Math.round(((1.279 + 1.589 + 1.269 + 1.629 + 1.549) / 5) * 1000) / 1000;
+    assert.deepEqual(avg['17'].g95, [[T0.getTime() / 1000, expected]]);
+  } finally {
+    body = fixture;
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('un avg.json antiguo (solo Girona) se conserva como media de Girona', async () => {
+  const dir = await tmp();
+  try {
+    body = cataluna;
+    const old = T0.getTime() / 1000 - 86400;
+    await writeFile(join(dir, 'avg.json'), JSON.stringify({ g95: [[old, 1.5]], gA: [[old, 1.6]] }));
+    await run(opts(dir, T0));
+    const avg = await readJ(join(dir, 'avg.json'));
+    assert.equal(avg.g95, undefined);
+    assert.deepEqual(avg['17'].g95[0], [old, 1.5]);
+    assert.equal(avg['17'].g95.length, 2);
+    assert.deepEqual(avg['17'].gA[0], [old, 1.6]);
+  } finally {
+    body = fixture;
     await rm(dir, { recursive: true, force: true });
   }
 });

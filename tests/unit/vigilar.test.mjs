@@ -8,7 +8,8 @@ const RAW = JSON.parse(await readFile(new URL('../fixtures/ministerio-girona.jso
 const NOW = new Date('2026-11-18T18:00:00Z');
 const API = 'https://api.example/17';
 const minAgo = (m) => new Date(NOW - m * 60000).toISOString();
-const muchas = (n) => Array.from({ length: n }, (_, i) => ({ id: String(i) }));
+const PRS = ['08', '17', '25', '43'];
+const muchas = (n, prs = PRS) => Array.from({ length: n }, (_, i) => ({ id: String(i), pr: prs[i % prs.length] }));
 
 const res = (status, body, headers = {}) => ({
   status,
@@ -23,10 +24,10 @@ function fakeFetch(over = {}) {
   const fn = async (url, opts) => {
     calls.push({ url, opts });
     for (const [k, v] of Object.entries(over)) if (url.includes(k)) { if (v instanceof Error) throw v; return typeof v === 'function' ? v(url, opts) : v; }
-    if (url === SITE) return res(200, '<title>Gasolina Girona</title>');
+    if (url === SITE) return res(200, '<title>Gasolina Cataluña</title>');
     if (url.endsWith('app.js')) return res(200, 'async function fetchLive() {}');
     if (url.endsWith('transform.mjs')) return res(200, 'export function transform() {}');
-    if (url.includes('data/latest.json')) return res(200, { actualizado: minAgo(20), estaciones: muchas(250) });
+    if (url.includes('data/latest.json')) return res(200, { actualizado: minAgo(20), estaciones: muchas(1600) });
     if (url.includes('api.github.com')) return res(200, { workflow_runs: [{ status: 'completed', conclusion: 'success', created_at: minAgo(25), event: 'workflow_dispatch', html_url: 'u' }] });
     if (url === API) return res(200, RAW, { 'access-control-allow-origin': '*' });
     return res(404, 'no');
@@ -44,7 +45,7 @@ test('todo correcto: las cuatro comprobaciones pasan', async () => {
 });
 
 test('avisa si los precios publicados tienen más de 2 horas (Worker o token parados)', async () => {
-  const f = fakeFetch({ 'data/latest.json': res(200, { actualizado: minAgo(185), estaciones: muchas(250) }) });
+  const f = fakeFetch({ 'data/latest.json': res(200, { actualizado: minAgo(185), estaciones: muchas(1600) }) });
   const r = await checkDatos(opts(f));
   assert.equal(r.ok, false);
   assert.match(r.detail, /hace 185 min/);
@@ -53,12 +54,12 @@ test('avisa si los precios publicados tienen más de 2 horas (Worker o token par
 });
 
 test('acepta datos de justo 2 horas', async () => {
-  const f = fakeFetch({ 'data/latest.json': res(200, { actualizado: minAgo(120), estaciones: muchas(250) }) });
+  const f = fakeFetch({ 'data/latest.json': res(200, { actualizado: minAgo(120), estaciones: muchas(1600) }) });
   assert.equal((await checkDatos(opts(f))).ok, true);
 });
 
 test('avisa si los datos publicados están vacíos, rotos o con fecha mala', async () => {
-  for (const body of [{ actualizado: minAgo(5), estaciones: [] }, 'esto no es json', { actualizado: 'ayer', estaciones: muchas(250) }]) {
+  for (const body of [{ actualizado: minAgo(5), estaciones: [] }, 'esto no es json', { actualizado: 'ayer', estaciones: muchas(1600) }]) {
     const r = await checkDatos(opts(fakeFetch({ 'data/latest.json': res(200, body) })));
     assert.equal(r.ok, false, JSON.stringify(body));
   }
@@ -134,4 +135,18 @@ test('el informe dice qué ha fallado, en hora de Girona y sin romper la tabla',
   assert.match(md, /Algo ha dejado de funcionar/);
   assert.match(md, /18\/11\/26, 19:00/);
   assert.match(md, /\| B \| ❌ \| mal \\\| raro \|/);
+});
+
+test('avisa si faltan gasolineras de alguna provincia de Cataluña', async () => {
+  const f = fakeFetch({ 'data/latest.json': res(200, { actualizado: minAgo(10), estaciones: muchas(1600, ['08', '17', '43']) }) });
+  const r = await checkDatos(opts(f));
+  assert.equal(r.ok, false);
+  assert.match(r.detail, /Lleida/);
+});
+
+test('avisa si latest.json trae pocas gasolineras (p. ej. solo Girona)', async () => {
+  const f = fakeFetch({ 'data/latest.json': res(200, { actualizado: minAgo(10), estaciones: muchas(272) }) });
+  const r = await checkDatos(opts(f));
+  assert.equal(r.ok, false);
+  assert.match(r.detail, /272/);
 });

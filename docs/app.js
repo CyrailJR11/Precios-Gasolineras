@@ -1,4 +1,4 @@
-import { API_BASE, FUEL_LABELS, transform, isValidResponse, parseFechaMinisterio } from './transform.mjs';
+import { API_BASE, API_CCAA, CCAA, PROVINCIAS, FUEL_LABELS, transform, isValidResponse } from './transform.mjs';
 
 const $ =(s) => document.querySelector(s);
 const FUEL_ORDER = ['g95', 'gA', 'g98', 'gP', 'g95p', 'e10', 'glp', 'hvo', 'gB', 'gnc', 'adb'];
@@ -9,10 +9,19 @@ const store = {
   set(k, v) { try { localStorage.setItem('gg.' + k, JSON.stringify(v)); } catch { /* sin almacenamiento */ } },
 };
 
+// Zona elegida: '' = toda Cataluña, '08' = una provincia, '08|Badalona' = un municipio de esa provincia
+function initialScope() {
+  const s = store.get('scope', null);
+  if (typeof s === 'string') return s;
+  // Antes la web era solo de Girona y guardaba el municipio en 'muni' ('' = toda la provincia)
+  const old = store.get('muni', null);
+  return typeof old === 'string' ? (old ? `17|${old}` : '17') : '';
+}
+
 const state = {
   data: null,
   fuel: store.get('fuel', 'g95'),
-  muni: store.get('muni', ''),
+  scope: initialScope(),
   near: false,
   pos: null,
   radius: store.get('radius', 10),
@@ -40,33 +49,39 @@ function haversine(a, b) {
 }
 
 // ---------- Carga ----------
-// 1) Se muestra al instante la copia guardada por la tarea horaria (data/latest.json).
+// 1) Se muestra al instante la copia guardada por la tarea programada (data/latest.json, toda Cataluña).
 // 2) En paralelo se piden los precios en directo al Ministerio y, si llegan, sustituyen a la copia.
-const PROVINCIA = '17';
-const LIVE_TIMEOUT = 25000;
-let liveInFlight = null;
+//    Para no descargar toda Cataluña en el móvil sin necesidad, solo se pide la provincia elegida
+//    (o toda la comunidad si la zona es «Toda Cataluña»).
+const LIVE_TIMEOUT = 25000;      // una provincia
+const LIVE_TIMEOUT_CCAA = 45000; // toda Cataluña: respuesta bastante más grande
+const ALL_PROVS = Object.keys(PROVINCIAS);
+
+// Copia guardada y precios en directo por provincia: { '17': { at: Date, estaciones: [...] } }
+const src = { snap: null, live: {} };
+const inFlight = new Map();
+
+const scopeProv = () => state.scope.slice(0, 2);
+const scopeMuni = () => state.scope.slice(3);
 
 async function fetchSnapshot() {
   const res = await fetch('data/latest.json', { cache: 'no-cache' });
   if (!res.ok) throw new Error('HTTP ' + res.status);
-  return { ...(await res.json()), live: false };
+  const d = await res.json();
+  // Copias antiguas (solo Girona) no traen la provincia de cada gasolinera
+  for (const s of d.estaciones) s.pr ||= d.provincia || '17';
+  return d;
 }
 
-async function fetchLive() {
+async function fetchLive(pr) {
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), LIVE_TIMEOUT);
+  const timer = setTimeout(() => ctrl.abort(), pr ? LIVE_TIMEOUT : LIVE_TIMEOUT_CCAA);
   try {
-    const res = await fetch(API_BASE + PROVINCIA, { signal: ctrl.signal, cache: 'no-store' });
+    const res = await fetch(pr ? API_BASE + pr : API_CCAA + CCAA, { signal: ctrl.signal, cache: 'no-store' });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const raw = await res.json();
     if (!isValidResponse(raw)) throw new Error('Respuesta sin estaciones');
-    return {
-      fechaMinisterio: parseFechaMinisterio(raw.Fecha),
-      actualizado: new Date().toISOString(),
-      fuels: FUEL_LABELS,
-      estaciones: transform(raw),
-      live: true,
-    };
+    return transform(raw).filter((s) => s.pr in PROVINCIAS);
   } finally {
     clearTimeout(timer);
   }
@@ -74,20 +89,37 @@ async function fetchLive() {
 
 // Estado de la última actualización, para la barra de origen
 const meta = {
-  snapshotAt: null, // hora de la copia horaria guardada en GitHub
-  liveAt: null,     // hora de la última consulta en directo al Ministerio que funcionó
+  snapshotAt: null, // hora de la copia guardada en GitHub
   liveError: false, // la última consulta en directo falló
-  loading: false,   // consulta en directo en curso
 };
+const isLoading = () => inFlight.size > 0;
+
+// De dónde salen los precios de la zona elegida: en directo si todas sus provincias lo están
+function source() {
+  const need = scopeProv() ? [scopeProv()] : ALL_PROVS;
+  const lv = need.map((p) => src.live[p]);
+  if (lv.every(Boolean)) return { live: true, at: new Date(Math.min(...lv.map((x) => x.at))) };
+  if (src.snap) return { live: false, at: new Date(src.snap.actualizado) };
+  const any = Object.values(src.live);
+  return any.length ? { live: true, at: new Date(Math.min(...any.map((x) => x.at))) } : null;
+}
 
 function refreshLive() {
-  if (liveInFlight) return liveInFlight;
-  meta.loading = true;
+  const pr = scopeProv();
+  const key = pr || CCAA;
+  if (inFlight.has(key)) return inFlight.get(key);
+  const p = fetchLive(pr)
+    .then((list) => {
+      const at = new Date();
+      for (const prov of pr ? [pr] : ALL_PROVS) src.live[prov] = { at, estaciones: list.filter((s) => s.pr === prov) };
+      meta.liveError = false;
+      return true;
+    })
+    .catch(() => { meta.liveError = true; return false; })
+    .finally(() => { inFlight.delete(key); update(); });
+  inFlight.set(key, p);
   renderSource();
-  liveInFlight = fetchLive()
-    .then((d) => { liveInFlight = null; meta.loading = false; meta.liveError = false; meta.liveAt = new Date(d.actualizado); apply(d); return true; })
-    .catch(() => { liveInFlight = null; meta.loading = false; meta.liveError = true; renderSource(); return false; });
-  return liveInFlight;
+  return p;
 }
 
 // "22:28" si es de hoy; "16 nov, 22:28" si no
@@ -108,19 +140,20 @@ function fmtAgo(date) {
 // Barra bajo el título: cuándo se actualizó por última vez y de dónde salen los precios
 function renderSource() {
   const el = $('#source');
-  const d = state.data;
+  const d = source();
+  const loading = isLoading();
   let kind, main, sub;
   if (!d) {
-    kind = meta.loading ? 'loading' : 'error';
-    main = meta.loading ? 'Consultando precios al Ministerio…' : 'Sin datos';
-    sub = meta.loading ? '' : 'No se ha podido conectar · Toca para reintentar';
+    kind = loading ? 'loading' : 'error';
+    main = loading ? 'Consultando precios al Ministerio…' : 'Sin datos';
+    sub = loading ? '' : 'No se ha podido conectar · Toca para reintentar';
   } else {
-    const at = new Date(d.actualizado);
+    const at = d.at;
     kind = d.live ? 'live' : meta.liveError ? 'error' : 'saved';
     main = `Actualizado a las ${fmtWhen(at)} (${fmtAgo(at)})`;
     const origin = d.live ? 'En directo del Ministerio' : 'Copia de GitHub';
     let extra;
-    if (meta.loading) extra = 'Consultando al Ministerio…';
+    if (loading) extra = 'Consultando al Ministerio…';
     else if (meta.liveError) extra = 'El Ministerio no responde, toca para reintentar';
     else if (d.live) extra = meta.snapshotAt ? `copia ${fmtWhen(meta.snapshotAt)}` : '';
     else extra = 'toca para ver en directo';
@@ -130,41 +163,62 @@ function renderSource() {
   // Icono de actualizar a la derecha: deja claro que la barra se puede tocar
   el.innerHTML = `<span class="src-dot" aria-hidden="true"></span><span class="src-text"><span class="src-main">${esc(main)}</span>${sub ? `<span class="src-sub">${esc(sub)}</span>` : ''}</span>`
     + '<svg class="src-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v5h-5"/></svg>';
-  el.setAttribute('aria-busy', String(meta.loading));
+  el.setAttribute('aria-busy', String(loading));
 }
 
-function apply(d) {
-  // No sustituir datos en directo por una copia guardada más antigua
-  if (state.data && state.data.live && !d.live) return;
-  state.data = d;
+// Junta la copia guardada con lo que haya en directo (el directo manda en su provincia) y repinta
+let zonesSig = '';
+function update() {
+  if (!src.snap && !Object.keys(src.live).length) { renderSource(); return; }
+  const liveProvs = new Set(Object.keys(src.live));
+  const d = state.data = {
+    fuels: src.snap?.fuels || FUEL_LABELS,
+    estaciones: [
+      ...(src.snap ? src.snap.estaciones.filter((s) => !liveProvs.has(s.pr)) : []),
+      ...Object.values(src.live).flatMap((x) => x.estaciones),
+    ],
+  };
 
-  // Combustibles disponibles en la provincia
+  // Combustibles disponibles en Cataluña
   const present = FUEL_ORDER.filter((k) => d.estaciones.some((s) => s.p[k] != null));
   if (!present.includes(state.fuel)) state.fuel = present[0];
   renderChips($('#fuelChips'), present.map((k) => [k, d.fuels[k]]), state.fuel, (k) => {
     state.fuel = k; store.set('fuel', k); state.shown = PAGE; render();
   });
 
-  // Municipios
-  const munis = [...new Set(d.estaciones.map((s) => s.m))].sort((a, b) => a.localeCompare(b, 'es'));
+  // Zonas: toda Cataluña, cada provincia y sus municipios. Solo se rehace la lista si ha cambiado.
+  const byProv = {};
+  for (const s of d.estaciones) (byProv[s.pr] ||= new Set()).add(s.m);
+  const provs = Object.keys(byProv).filter((p) => p in PROVINCIAS)
+    .sort((a, b) => PROVINCIAS[a].localeCompare(PROVINCIAS[b], 'es'));
+  const zones = provs.map((p) => [p, [...byProv[p]].sort((a, b) => a.localeCompare(b, 'es'))]);
+  const sig = JSON.stringify(zones);
   const sel = $('#muni');
-  sel.length = 1; // deja "Toda la provincia"
-  for (const m of munis) sel.add(new Option(m, m));
-  if (!munis.includes(state.muni)) state.muni = '';
-  sel.value = state.muni;
+  if (sig !== zonesSig) {
+    zonesSig = sig;
+    const opts = [new Option('Toda Cataluña', '')];
+    for (const [p, munis] of zones) {
+      const g = document.createElement('optgroup');
+      g.label = PROVINCIAS[p];
+      g.append(new Option(`Toda la provincia de ${PROVINCIAS[p]}`, p), ...munis.map((m) => new Option(m, `${p}|${m}`)));
+      opts.push(g);
+    }
+    sel.replaceChildren(...opts);
+  }
+  const valid = state.scope === '' || zones.some(([p, munis]) => state.scope === p || munis.some((m) => state.scope === `${p}|${m}`));
+  if (!valid) state.scope = '';
+  sel.value = state.scope;
 
   renderSource();
   render();
 }
 
 async function load() {
-  meta.loading = true;
-  renderSource();
   const live = refreshLive();
   try {
-    const snap = await fetchSnapshot();
-    meta.snapshotAt = new Date(snap.actualizado);
-    apply(snap);
+    src.snap = await fetchSnapshot();
+    meta.snapshotAt = new Date(src.snap.actualizado);
+    update();
   } catch { /* sin copia guardada: se espera al directo */ }
   const ok = await live;
   if (!ok && !state.data) {
@@ -194,14 +248,15 @@ function renderChips(container, items, current, onPick) {
 
 // ---------- Lista ----------
 function filtered() {
-  const { data, fuel, muni, near, pos, radius, q, restricted } = state;
+  const { data, fuel, near, pos, radius, q, restricted } = state;
+  const pr = scopeProv(), muni = scopeMuni();
   const nq = norm(q);
   let rows = data.estaciones.filter((s) => s.p[fuel] != null && (restricted || !s.r));
   if (near && pos) {
     rows = rows.map((s) => ({ ...s, dist: s.lat != null ? haversine(pos, s) : Infinity }));
     if (radius > 0) rows = rows.filter((s) => s.dist <= radius);
-  } else if (muni) {
-    rows = rows.filter((s) => s.m === muni);
+  } else if (pr) {
+    rows = rows.filter((s) => s.pr === pr && (!muni || s.m === muni));
   }
   if (nq) rows = rows.filter((s) => norm(`${s.n} ${s.d} ${s.l} ${s.m}`).includes(nq));
   const byPrice = (a, b) => a.p[fuel] - b.p[fuel] || (a.dist ?? 0) - (b.dist ?? 0);
@@ -219,7 +274,7 @@ function render() {
 
   const scope = state.near && state.pos
     ? (state.radius > 0 ? `a menos de ${state.radius} km` : 'por distancia')
-    : (state.muni || 'en la provincia');
+    : (scopeMuni() || (scopeProv() ? `en la provincia de ${PROVINCIAS[scopeProv()]}` : 'en Cataluña'));
   $('#summary').innerHTML = prices.length ? `
     <div class="stat"><div class="k">Más barata</div><div class="v">${fmtPrice(min)} €</div></div>
     <div class="stat"><div class="k">Media</div><div class="v">${fmtPrice(avg)} €</div></div>
@@ -305,7 +360,9 @@ async function openDetail(id) {
   $('#dTitle').textContent = s.n;
   $('#dAddr').textContent = `${s.d} · ${s.cp} ${s.l || s.m}`;
   $('#dHours').textContent = s.h ? 'Horario: ' + s.h + (s.r ? ' · Venta restringida' : '') : '';
-  $('#dMaps').href = `https://www.google.com/maps/dir/?api=1&destination=${s.lat},${s.lon}`;
+  // Sin coordenadas (alguna estación llega sin ubicar), se busca por la dirección
+  const dest = s.lat != null ? `${s.lat},${s.lon}` : encodeURIComponent(`${s.d}, ${s.cp} ${s.l || s.m}`);
+  $('#dMaps').href = `https://www.google.com/maps/dir/?api=1&destination=${dest}`;
   const fuels = FUEL_ORDER.filter((k) => s.p[k] != null);
   $('#dPrices').innerHTML = fuels.map((k) =>
     `<div class="stat" data-k="${esc(k)}"><div class="k">${esc(state.data.fuels[k])}</div><div class="v">${fmtPrice(s.p[k])} €</div></div>`).join('');
@@ -317,7 +374,7 @@ async function openDetail(id) {
   try {
     const [h, a] = await Promise.all([
       fetch(`data/h/${encodeURIComponent(id)}.json`, { cache: 'no-cache' }).then((r) => (r.ok ? r.json() : {})),
-      avgCache || fetch('data/avg.json', { cache: 'no-cache' }).then((r) => (r.ok ? r.json() : {})),
+      avgCache || fetch('data/avg.json', { cache: 'no-cache' }).then((r) => (r.ok ? r.json() : {})).then(normAvg),
     ]);
     if (detail.st !== s) return;
     avgCache = a;
@@ -326,6 +383,11 @@ async function openDetail(id) {
     detail.hist = {};
   }
   drawChart();
+}
+
+// avg.json guarda una media por provincia: { '17': { g95: [...] } }. El formato antiguo (solo Girona) era { g95: [...] }.
+function normAvg(a) {
+  return Object.keys(a).some((k) => k in FUEL_LABELS) ? { 17: a } : a;
 }
 
 // Valor de una serie escalonada en el instante t
@@ -372,7 +434,7 @@ function drawChart() {
     `<tr><td>${fmtDate(new Date(ts * 1000), { dateStyle: 'short', timeStyle: 'short' })}</td><td>${v == null ? 'No disponible' : fmtPrice(v) + ' €'}</td></tr>`).join('');
 
   const st = clip(full, t0, t1);
-  const ref = clip((avgCache && avgCache[k]) || [], t0, t1);
+  const ref = clip((avgCache && avgCache[detail.st.pr] && avgCache[detail.st.pr][k]) || [], t0, t1);
   const since = fmtDate(new Date(firstTs * 1000), { day: 'numeric', month: 'long', year: 'numeric' });
 
   if (!st.length) { box.innerHTML = '<div class="empty-chart">Aún no hay histórico para este combustible.</div>'; return; }
@@ -458,7 +520,12 @@ function drawChart() {
 }
 
 // ---------- Eventos ----------
-$('#muni').addEventListener('change', (e) => { state.muni = e.target.value; store.set('muni', state.muni); state.shown = PAGE; render(); });
+$('#muni').addEventListener('change', (e) => {
+  state.scope = e.target.value; store.set('scope', state.scope); state.shown = PAGE;
+  render();
+  // Si la zona nueva aún no tiene precios en directo, se piden
+  if (!source()?.live) refreshLive(); else renderSource();
+});
 $('#nearBtn').addEventListener('click', toggleNear);
 $('#radius').value = String(state.radius);
 $('#radius').addEventListener('change', (e) => { state.radius = +e.target.value; store.set('radius', state.radius); render(); });
@@ -479,7 +546,8 @@ $('#dRange').addEventListener('click', (e) => {
 let rz; window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { if ($('#detail').open) drawChart(); }, 150); });
 document.addEventListener('visibilitychange', () => {
   // Al volver a la app tras más de 5 minutos, pide de nuevo los precios en directo
-  if (document.visibilityState === 'visible' && state.data && Date.now() - new Date(state.data.actualizado) > 5 * 60 * 1000) refreshLive();
+  const d = source();
+  if (document.visibilityState === 'visible' && d && Date.now() - d.at > 5 * 60 * 1000) refreshLive();
 });
 $('#source').addEventListener('click', () => refreshLive());
 
