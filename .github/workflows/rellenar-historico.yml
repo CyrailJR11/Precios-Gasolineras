@@ -1,0 +1,61 @@
+name: Rellenar histórico
+
+# Rellena hacia atrás el histórico de precios de toda Cataluña con el servicio histórico del Ministerio
+# (un dato por día). Se lanza a mano (Actions → Rellenar histórico → Run workflow). Solo añade días
+# anteriores a los que ya hay, así que repetirlo no duplica nada. En un PR solo hace una prueba de
+# 7 días sin guardar nada, para ver cuánto tarda y cuánto ocupa.
+on:
+  workflow_dispatch:
+    inputs:
+      dias:
+        description: 'Días hacia atrás (máximo 400)'
+        required: true
+        default: '365'
+  pull_request:
+    paths: ['scripts/rellenar.mjs', '.github/workflows/rellenar-historico.yml']
+
+permissions:
+  contents: write
+
+# No comparte grupo con "Actualizar precios": si esa tarea se quedara en cola o cancelada, la
+# vigilancia daría una falsa alarma. Los cambios se suben al final, sobre la última versión de main.
+concurrency:
+  group: rellenar-historico
+  cancel-in-progress: false
+
+jobs:
+  rellenar:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Descargar el histórico del Ministerio
+        run: node scripts/rellenar.mjs descargar --dias "${DIAS}" --cache "$RUNNER_TEMP/historico.json"
+        env:
+          DIAS: ${{ github.event_name == 'workflow_dispatch' && inputs.dias || '7' }}
+
+      - name: Prueba sin guardar (PR)
+        if: ${{ github.event_name == 'pull_request' }}
+        run: node scripts/rellenar.mjs aplicar --cache "$RUNNER_TEMP/historico.json"
+
+      - name: Añadir al histórico y guardar
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Se repite sobre la última versión de main si la tarea de precios ha subido algo entretanto
+          for i in 1 2 3 4 5; do
+            git fetch origin main
+            git reset --hard origin/main
+            node scripts/rellenar.mjs aplicar --cache "$RUNNER_TEMP/historico.json"
+            git add docs/data
+            if git diff --cached --quiet; then echo "Sin cambios"; exit 0; fi
+            git commit -q -m "Histórico rellenado: ${{ inputs.dias }} días ($(TZ=Europe/Madrid date '+%Y-%m-%d %H:%M'))"
+            if git push origin HEAD:main; then exit 0; fi
+            sleep 20
+          done
+          exit 1
