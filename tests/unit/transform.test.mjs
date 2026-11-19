@@ -114,3 +114,10 @@ test('cada gasolinera lleva el código de su provincia', () => {
   const raw = { ListaEESSPrecio: [{ IDEESS: '1', 'Rótulo': 'X', IDProvincia: '25', 'Tipo Venta': 'P' }] };
   assert.equal(transform(raw)[0].pr, '25');
 });
+
+test('coordenadas 0,0 (estación sin ubicar) se tratan como desconocidas', () => {
+  const raw = { ListaEESSPrecio: [{ IDEESS: '1', 'Rótulo': 'X', IDProvincia: '08', Latitud: '0,000000', 'Longitud (WGS84)': '0,000000' }] };
+  const [s] = transform(raw);
+  assert.equal(s.lat, null);
+  assert.equal(s.lon, null);
+});

@@ -323,3 +323,15 @@ test.describe('toda Cataluña', () => {
     await expect(page.locator('#chart svg path.line.ref')).toHaveCount(0);
   });
 });
+
+test('gasolinera sin ubicar (0,0): «Cómo llegar» busca por la dirección', async ({ page }) => {
+  const raw = JSON.parse(JSON.stringify(RAW_CAT));
+  const e = raw.ListaEESSPrecio.find((x) => x.IDEESS === '2004');
+  e.Latitud = '0,000000'; e['Longitud (WGS84)'] = '0,000000';
+  await mockData(page, { snap: snapshot({ raw }), liveBody: raw });
+  await page.goto('/');
+  await waitLiveSettled(page);
+  await page.locator('.card', { hasText: 'Galp' }).filter({ hasText: 'Catalunya' }).click();
+  await expect(page.getByRole('link', { name: 'Cómo llegar' }))
+    .toHaveAttribute('href', 'https://www.google.com/maps/dir/?api=1&destination=Avinguda%20Catalunya%2C%203%2C%2043002%20Tarragona');
+});

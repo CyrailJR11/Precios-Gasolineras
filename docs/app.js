@@ -360,7 +360,9 @@ async function openDetail(id) {
   $('#dTitle').textContent = s.n;
   $('#dAddr').textContent = `${s.d} · ${s.cp} ${s.l || s.m}`;
   $('#dHours').textContent = s.h ? 'Horario: ' + s.h + (s.r ? ' · Venta restringida' : '') : '';
-  $('#dMaps').href = `https://www.google.com/maps/dir/?api=1&destination=${s.lat},${s.lon}`;
+  // Sin coordenadas (alguna estación llega sin ubicar), se busca por la dirección
+  const dest = s.lat != null ? `${s.lat},${s.lon}` : encodeURIComponent(`${s.d}, ${s.cp} ${s.l || s.m}`);
+  $('#dMaps').href = `https://www.google.com/maps/dir/?api=1&destination=${dest}`;
   const fuels = FUEL_ORDER.filter((k) => s.p[k] != null);
   $('#dPrices').innerHTML = fuels.map((k) =>
     `<div class="stat" data-k="${esc(k)}"><div class="k">${esc(state.data.fuels[k])}</div><div class="v">${fmtPrice(s.p[k])} €</div></div>`).join('');

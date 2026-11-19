@@ -55,6 +55,9 @@ export function parseFechaMinisterio(f) {
 
 export function transform(raw) {
   return raw.ListaEESSPrecio.map((e) => {
+    // Alguna estación llega con coordenadas 0,0 (sin ubicar): se tratan como desconocidas
+    let lat = num(e['Latitud']), lon = num(e['Longitud (WGS84)']);
+    if (!lat || !lon) lat = lon = null;
     const p = {};
     for (const [k, [field]] of Object.entries(FUELS)) {
       const v = num(e[field]);
@@ -67,8 +70,8 @@ export function transform(raw) {
       m: e['Municipio'],
       l: titleCase(e['Localidad']),
       cp: e['C.P.'],
-      lat: num(e['Latitud']),
-      lon: num(e['Longitud (WGS84)']),
+      lat,
+      lon,
       h: e['Horario'],
       // Tipo Venta: P = público, R = restringido (socios / flotas)
       r: e['Tipo Venta'] === 'R' ? 1 : 0,
