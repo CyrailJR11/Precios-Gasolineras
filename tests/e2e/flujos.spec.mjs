@@ -236,6 +236,11 @@ test.describe('ficha de gasolinera', () => {
     await expect(chart.locator('.tip')).toBeVisible();
     await expect(chart.locator('.tip')).toContainText('€');
     await expect(chart.locator('.tip')).toContainText('Media');
+    // El globo va en la franja de encima del gráfico: no tapa las líneas
+    const tip = await chart.locator('.tip').boundingBox();
+    expect(tip.y + tip.height).toBeLessThanOrEqual(box.y + 1);
+    expect(tip.x).toBeGreaterThanOrEqual(box.x - 1);
+    expect(tip.x + tip.width).toBeLessThanOrEqual(box.x + box.width + 1);
 
     // Cambiar de combustible en el gráfico
     await page.locator('#dFuelChips').getByRole('radio', { name: 'Diésel', exact: true }).click();

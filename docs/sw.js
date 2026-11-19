@@ -1,5 +1,5 @@
 // Service worker: la interfaz funciona sin conexión y los datos se piden siempre a la red primero.
-const CACHE = 'gg-v17';
+const CACHE = 'gg-v18';
 const SHELL = ['./', 'index.html', 'style.css', 'app.js', 'transform.mjs', 'comarcas.mjs','manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', (e) => {
