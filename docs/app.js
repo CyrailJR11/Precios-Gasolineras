@@ -494,8 +494,7 @@ function drawChart() {
       <rect x="${m.l}" y="0" width="${iw}" height="${H}" fill="transparent"/>
     </svg>
     <div class="tip" hidden></div>
-    ${full.length <= 1 ? `<p class="small muted">El histórico se acumula desde el ${since}; el gráfico irá mostrando los cambios de precio.</p>`
-      : detail.days && firstTs > t1 - (detail.days - 1) * 86400 ? `<p class="small muted short-range">Solo hay datos desde el ${since}.</p>` : ''}`;
+    ${full.length <= 1 ? `<p class="small muted">El histórico se acumula desde el ${since}; el gráfico irá mostrando los cambios de precio.</p>` : ''}`;
 
   const svg = box.querySelector('svg');
   const cross = svg.querySelector('.cross');
