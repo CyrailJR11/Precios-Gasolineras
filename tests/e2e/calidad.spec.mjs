@@ -178,8 +178,8 @@ test.describe('app instalable (PWA)', () => {
     expect(m.name).toBe('Gasolina Cataluña');
     expect(m.display).toBe('standalone');
     expect(m.start_url).toBe('./');
-    const sizes = m.icons.map((i) => i.sizes);
-    expect(sizes).toEqual(expect.arrayContaining(['192x192', '512x512']));
+    // Icono vectorial único (sirve para cualquier tamaño)
+    expect(m.icons.some((i) => i.sizes === 'any' && i.type === 'image/svg+xml')).toBeTruthy();
     for (const icon of m.icons) expect((await request.get(icon.src)).ok(), icon.src).toBeTruthy();
   });
 
@@ -188,7 +188,7 @@ test.describe('app instalable (PWA)', () => {
     const apple = await page.locator('link[rel="apple-touch-icon"]').getAttribute('href');
     expect((await request.get(apple)).ok()).toBeTruthy();
     await expect(page.locator('meta[name="viewport"]')).toHaveAttribute('content', /width=device-width/);
-    await expect(page).toHaveTitle('Gasolina Cataluña');
+    await expect(page).toHaveTitle('Combustibles Cataluña');
   });
 });
 

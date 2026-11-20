@@ -45,7 +45,7 @@ async function get(fetchImpl, url, { tries = 3, delayMs = 3000, timeoutMs = 30_0
 
 export async function checkWeb({ fetchImpl, site, retry }) {
   const fallos = [];
-  for (const [path, expect] of [['', /<title>Gasolina Cataluña<\/title>/], ['app.js', /fetchLive/], ['transform.mjs', /export function transform/]]) {
+  for (const [path, expect] of [['', /<title>Combustibles Cataluña<\/title>/], ['app.js', /fetchLive/], ['transform.mjs', /export function transform/]]) {
     const res = await get(fetchImpl, site + path, retry);
     if (res.status !== 200) fallos.push(`${path || 'página principal'}: HTTP ${res.status}`);
     else if (!expect.test(await res.text())) fallos.push(`${path || 'página principal'}: contenido inesperado`);

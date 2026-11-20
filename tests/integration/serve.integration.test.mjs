@@ -25,7 +25,7 @@ test('sirve index.html en /', async () => {
   const r = await get('/');
   assert.equal(r.status, 200);
   assert.match(r.headers.get('content-type'), /text\/html/);
-  assert.match(await r.text(), /<title>Gasolina Cataluña<\/title>/);
+  assert.match(await r.text(), /<title>Combustibles Cataluña<\/title>/);
 });
 
 for (const [path, type] of [

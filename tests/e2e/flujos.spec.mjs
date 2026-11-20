@@ -267,13 +267,15 @@ test.describe('ficha de gasolinera', () => {
   });
 
   test('el eje de fechas abarca el periodo elegido aunque haya menos datos', async ({ page }) => {
-    const firstLabel = () => page.locator('#chart svg text.axis-label[text-anchor="start"]').textContent();
-    const fmt = (daysAgo) => new Date(Date.now() - daysAgo * 86400_000)
-      .toLocaleString('es-ES', { timeZone: 'Europe/Madrid', day: 'numeric', month: 'short' });
-    for (const [label, days] of [['7 días', 7], ['90 días', 90]]) {
-      await page.locator('#dRange').getByRole('radio', { name: label }).click();
-      await expect.poll(firstLabel).toBe(fmt(days));
-    }
+    const labels = page.locator('#chart svg text.axis-label.month');
+    const hace = (dias, opts) => new Date(Date.now() - dias * 86400_000)
+      .toLocaleString('es-ES', { timeZone: 'Europe/Madrid', ...opts }).replace('.', '');
+    // 7 días: aparece el día de hace 6 días
+    await page.locator('#dRange').getByRole('radio', { name: '7 días' }).click();
+    await expect(labels.first()).toHaveText(new RegExp(` ${hace(6, { day: 'numeric' })}$`));
+    // 90 días: aparece el mes de hace 60 días, aunque el histórico de prueba sea más corto
+    await page.locator('#dRange').getByRole('radio', { name: '90 días' }).click();
+    await expect(labels.filter({ hasText: new RegExp(`^${hace(60, { month: 'short' }).slice(0, 3)}$`) })).toHaveCount(1);
   });
 
   test('con «1 año» el eje muestra todos los meses', async ({ page }) => {
@@ -283,6 +285,33 @@ test.describe('ficha de gasolinera', () => {
     const mes = new Date(Date.now() - 180 * 86400_000)
       .toLocaleString('es-ES', { timeZone: 'Europe/Madrid', month: 'short' }).replace('.', '').slice(0, 3);
     await expect(labels.filter({ hasText: new RegExp(`^(${mes}|${mes[0].toUpperCase()})$`) })).toHaveCount(1);
+  });
+
+  test('con 7, 30 y 90 días el eje tiene cuadrícula y etiquetas como en «1 año»', async ({ page }) => {
+    const chart = page.locator('#chart svg');
+    const labels = chart.locator('text.axis-label.month');
+    const verticales = async () => chart.locator('line.gridline').evaluateAll((ls) => ls.filter((l) => l.getAttribute('x1') === l.getAttribute('x2')).length);
+    const hoy = new Date();
+    const dia = (d) => d.toLocaleString('es-ES', { timeZone: 'Europe/Madrid', day: 'numeric' });
+
+    // 7 días: una raya por día y «día de la semana + fecha»
+    await page.locator('#dRange').getByRole('radio', { name: '7 días' }).click();
+    await expect.poll(verticales).toBeGreaterThanOrEqual(6);
+    await expect.poll(() => labels.count()).toBeGreaterThanOrEqual(6);
+    await expect(labels.last()).toHaveText(new RegExp(`^\\S+ ${dia(hoy)}$`));
+
+    // 30 días: una raya por semana y la fecha de cada semana
+    await page.locator('#dRange').getByRole('radio', { name: '30 días' }).click();
+    await expect.poll(verticales).toBeGreaterThanOrEqual(4);
+    await expect.poll(verticales).toBeLessThanOrEqual(5);
+    await expect.poll(() => labels.count()).toBeGreaterThanOrEqual(4);
+
+    // 90 días: rayas por semana y los meses abajo
+    await page.locator('#dRange').getByRole('radio', { name: '90 días' }).click();
+    await expect.poll(verticales).toBeGreaterThanOrEqual(12);
+    const mes = new Date(Date.now() - 45 * 86400_000)
+      .toLocaleString('es-ES', { timeZone: 'Europe/Madrid', month: 'short' }).replace('.', '').slice(0, 3);
+    await expect(labels.filter({ hasText: new RegExp(`^${mes}$`) })).toHaveCount(1);
   });
 
   test('se cierra con el botón, con Escape y tocando fuera', async ({ page }) => {

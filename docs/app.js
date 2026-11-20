@@ -533,39 +533,72 @@ function drawChart() {
     grid += `<line class="gridline" x1="${m.l}" x2="${W - m.r}" y1="${y(v)}" y2="${y(v)}"/>`;
     grid += `<text class="axis-label" x="${m.l - 6}" y="${y(v) + 4}" text-anchor="end">${v.toFixed(step < 0.01 ? 3 : 2).replace('.', ',')}</text>`;
   }
-  if (span > 120 * 86400) {
-    // Periodos largos: una raya y una etiqueta por cada mes
-    const parts = (t) => fmtDate(new Date(t * 1000), { year: 'numeric', month: 'numeric' }).split('/').map(Number);
-    let [mo, yr] = parts(t0);
-    const monthStart = (y0, m0) => Date.UTC(y0, m0 - 1, 1) / 1000 - 3600; // 1 de mes en hora de Madrid (aprox.)
-    const fullW = (30.4 * 86400 / span) * iw;
-    const short = fullW >= 19;
-    for (let a = monthStart(yr, mo); a < t1;) {
-      const nm = mo === 12 ? 1 : mo + 1, ny = mo === 12 ? yr + 1 : yr;
-      const b = monthStart(ny, nm);
+  // Eje de tiempo: rayas verticales y etiquetas centradas en cada tramo, igual en todos los periodos.
+  // 1 año: rayas y etiquetas por mes. 90 días: rayas por semana y etiquetas por mes.
+  // 30 días: rayas y etiquetas por semana. 7 días: rayas por día y etiqueta «lun 17».
+  const DAY = 86400;
+  const ymd = (t) => fmtDate(new Date(t * 1000), { year: 'numeric', month: 'numeric', day: 'numeric' }).split('/').map(Number);
+  // Medianoche de Madrid de un día dado (corrige el horario de verano)
+  const midnight = (yy, mm, dd) => {
+    let g = Date.UTC(yy, mm - 1, dd) / 1000 - 3600;
+    if (+fmtDate(new Date(g * 1000), { hour: 'numeric', hourCycle: 'h23' }) !== 0) g -= 3600;
+    return g;
+  };
+  const dayStart = (t) => { const [d, mo, yr] = ymd(t); return midnight(yr, mo, d); };
+  const addDays = (t, n) => dayStart(t + n * DAY + 12 * 3600);
+  const monthStarts = () => {
+    const out = []; let [, mo, yr] = ymd(t0);
+    for (let a = midnight(yr, mo, 1); a < t1;) {
+      out.push(a);
+      if (mo === 12) { mo = 1; yr++; } else mo++;
+      a = midnight(yr, mo, 1);
+    }
+    return out;
+  };
+  const weekStarts = () => {
+    // Semanas de lunes a domingo
+    const wd = (new Date(t0 * 1000).toLocaleString('en-GB', { timeZone: TZ, weekday: 'short' }));
+    const back = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].indexOf(wd);
+    const out = [];
+    for (let a = addDays(dayStart(t0), -back); a < t1; a = addDays(a, 7)) out.push(a);
+    return out;
+  };
+  const dayStarts = () => { const out = []; for (let a = dayStart(t0); a < t1; a = addDays(a, 1)) out.push(a); return out; };
+  const rayas = (starts) => {
+    for (const a of starts) if (a > t0) grid += `<line class="gridline" x1="${x(a)}" x2="${x(a)}" y1="${m.t}" y2="${H - m.b}"/>`;
+  };
+  // Cada tramo se rotula en su centro. El tramo en curso, si va por la mitad o menos, se alinea
+  // al borde derecho para no pisar al anterior; un tramo muy corto no se rotula.
+  const etiquetas = (starts, fullSecs, label) => {
+    const fullW = (fullSecs / span) * iw;
+    starts.forEach((a, i) => {
+      const b = i + 1 < starts.length ? starts[i + 1] : a + fullSecs;
       const s0 = Math.max(a, t0), s1 = Math.min(b, t1);
-      if (a > t0) grid += `<line class="gridline" x1="${x(a)}" x2="${x(a)}" y1="${m.t}" y2="${H - m.b}"/>`;
-      // Cada mes se rotula en el centro de su tramo. El mes en curso, si va por la mitad o menos,
-      // se alinea al borde derecho para no pisar al anterior; un tramo muy corto no se rotula.
       const w = x(s1) - x(s0), last = b >= t1;
-      if (w >= fullW * (last ? 0.4 : 0.5)) {
-        let lbl = fmtDate(new Date(((s0 + s1) / 2) * 1000), { month: 'short' }).replace('.', '').slice(0, 3);
-        if (!short) lbl = lbl.charAt(0).toUpperCase();
-        const atEnd = last && w < fullW * 0.75;
-        grid += `<text class="axis-label month" x="${atEnd ? W - 1 : (x(s0) + x(s1)) / 2}" y="${H - 6}" text-anchor="${atEnd ? 'end' : 'middle'}">${lbl}</text>`;
-      }
-      a = b; mo = nm; yr = ny;
-    }
+      if (w < fullW * (last ? 0.4 : 0.5)) return;
+      const atEnd = last && w < fullW * 0.75;
+      grid += `<text class="axis-label month" x="${atEnd ? W - 1 : (x(s0) + x(s1)) / 2}" y="${H - 6}" text-anchor="${atEnd ? 'end' : 'middle'}">${label(a, fullW)}</text>`;
+    });
+  };
+  const mes = (a, fullW) => {
+    const l = fmtDate(new Date((a + 15 * DAY) * 1000), { month: 'short' }).replace('.', '').slice(0, 3);
+    return fullW >= 19 ? l : l.charAt(0).toUpperCase();
+  };
+  if (span > 120 * DAY) {
+    const ms = monthStarts(); rayas(ms); etiquetas(ms, 30.4 * DAY, mes);
+  } else if (span > 45 * DAY) {
+    rayas(weekStarts()); etiquetas(monthStarts(), 30.4 * DAY, mes);
+  } else if (span > 10 * DAY) {
+    const ws = weekStarts(); rayas(ws);
+    etiquetas(ws, 7 * DAY, (a) => fmtDate(new Date(a * 1000), { day: 'numeric', month: 'short' }).replace('.', ''));
   } else {
-    // Etiquetas de fecha (hasta 4)
-    const nTicks = Math.min(4, Math.max(2, Math.floor(iw / 80)));
-    const multiDay = span > 2 * 86400;
-    for (let i = 0; i < nTicks; i++) {
-      const t = t0 + (span * i) / (nTicks - 1);
-      const lbl = fmtDate(new Date(t * 1000), multiDay ? { day: 'numeric', month: 'short' } : { hour: '2-digit', minute: '2-digit' });
-      const anchor = i === 0 ? 'start' : i === nTicks - 1 ? 'end' : 'middle';
-      grid += `<text class="axis-label" x="${x(t)}" y="${H - 6}" text-anchor="${anchor}">${lbl}</text>`;
-    }
+    const ds = dayStarts(); rayas(ds);
+    etiquetas(ds, DAY, (a, fullW) => {
+      const wd = fmtDate(new Date((a + 12 * 3600) * 1000), { weekday: 'short' }).replace('.', '');
+      const d = fmtDate(new Date((a + 12 * 3600) * 1000), { day: 'numeric' });
+      // Si no cabe «lun 17», la inicial (X para el miércoles, como en los calendarios)
+      return fullW >= 38 ? `${wd} ${d}` : `${wd === 'mié' ? 'X' : wd.charAt(0).toUpperCase()} ${d}`;
+    });
   }
 
   const hasRef = ref.length > 0;

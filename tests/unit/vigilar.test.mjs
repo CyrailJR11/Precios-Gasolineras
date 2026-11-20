@@ -24,7 +24,7 @@ function fakeFetch(over = {}) {
   const fn = async (url, opts) => {
     calls.push({ url, opts });
     for (const [k, v] of Object.entries(over)) if (url.includes(k)) { if (v instanceof Error) throw v; return typeof v === 'function' ? v(url, opts) : v; }
-    if (url === SITE) return res(200, '<title>Gasolina Cataluña</title>');
+    if (url === SITE) return res(200, '<title>Combustibles Cataluña</title>');
     if (url.endsWith('app.js')) return res(200, 'async function fetchLive() {}');
     if (url.endsWith('transform.mjs')) return res(200, 'export function transform() {}');
     if (url.includes('data/latest.json')) return res(200, { actualizado: minAgo(20), estaciones: muchas(1600) });
